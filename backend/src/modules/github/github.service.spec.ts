@@ -114,7 +114,7 @@ describe('GithubService', () => {
         GITHUB_CACHE_TTL.DEVELOPER,
       );
       expect(result.cached).toBe(false);
-      expect(result.username).toBe('testuser');
+      expect(result).toMatchObject({ username: 'testuser' });
     });
 
     it('should evict cache and fetch fresh when forceRefresh is true', async () => {
