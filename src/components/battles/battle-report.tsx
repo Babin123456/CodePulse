@@ -1,8 +1,10 @@
 "use client";
 
+import { useEffect } from "react";
 import { motion } from "motion/react";
 import { Trophy, Star, Activity, GitCommit, Brain, Share2, Download, Link as LinkIcon, AlertTriangle, TrendingUp, BookOpen, Code, Terminal, Crown, Award } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { audioManager } from "@/lib/audio-manager";
 
 interface DevData {
   username: string;
@@ -21,6 +23,15 @@ interface BattleReportProps {
 }
 
 export function BattleReport({ player1, player2, battleType, onRematch }: BattleReportProps) {
+  // Play victory celebration audio when battle report mounts
+  useEffect(() => {
+    try {
+      audioManager.playVictoryFanfare();
+    } catch (e) {
+      console.error("Audio playback error:", e);
+    }
+  }, []);
+
   // Score calculation for final report
   const calculateScore = (stats: any) => (stats.totalCommits * 1) + (stats.totalPRs * 5) + (stats.totalStars * 10) + (stats.followers * 2) + (stats.streak * 5);
   const p1Score = calculateScore(player1.stats);
