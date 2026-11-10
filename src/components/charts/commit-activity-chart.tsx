@@ -1,19 +1,30 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useEffect } from 'react';
 import ReactECharts from 'echarts-for-react';
 import { motion } from 'motion/react';
 import { CHART_THEME } from '@/lib/constants';
 import { cn } from '@/lib/utils';
-import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import type { TimeRange, CommitActivity } from '@/types';
+import { GitCommit, TrendingUp, Calendar } from 'lucide-react';
+import type { CommitActivity } from '@/types';
 
-const TIME_RANGES: { value: TimeRange; label: string; days: number }[] = [
-  { value: '7d', label: '7d', days: 7 },
-  { value: '30d', label: '30d', days: 30 },
-  { value: '90d', label: '90d', days: 90 },
-  { value: '1y', label: '1y', days: 365 },
+export type TimeframeOption = '7D' | '1M' | '6M' | '1Y' | 'ALL';
+
+interface TimeframeConfig {
+  id: TimeframeOption;
+  label: string;
+  days: number | null;
+}
+
+const TIMEFRAMES: TimeframeConfig[] = [
+  { id: '7D', label: '7D', days: 7 },
+  { id: '1M', label: '1M', days: 30 },
+  { id: '6M', label: '6M', days: 180 },
+  { id: '1Y', label: '1Y', days: 365 },
+  { id: 'ALL', label: 'ALL', days: null },
 ];
+
+const STORAGE_KEY = 'codepulse_chart_timeframe';
 
 interface CommitActivityChartProps {
   className?: string;
@@ -21,19 +32,77 @@ interface CommitActivityChartProps {
 }
 
 export function CommitActivityChart({ className, data = [] }: CommitActivityChartProps) {
-  const [range, setRange] = useState<TimeRange>('30d');
+  const [timeframe, setTimeframe] = useState<TimeframeOption>('1M');
 
-  const currentRange = TIME_RANGES.find((r) => r.value === range) ?? TIME_RANGES[1];
-  const commitData = useMemo(() => {
-    // Basic filter for the last X days based on range
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY) as TimeframeOption | null;
+      if (saved && TIMEFRAMES.some((t) => t.id === saved)) {
+        setTimeframe(saved);
+      }
+    } catch (e) {
+      console.error('Failed to read timeframe preference', e);
+    }
+  }, []);
+
+  const handleSelectTimeframe = (tf: TimeframeOption) => {
+    setTimeframe(tf);
+    try {
+      localStorage.setItem(STORAGE_KEY, tf);
+    } catch (e) {
+      console.error('Failed to save timeframe preference', e);
+    }
+  };
+
+  const selectedConfig = TIMEFRAMES.find((t) => t.id === timeframe) || TIMEFRAMES[1];
+
+  const filteredData = useMemo(() => {
+    if (!data || data.length === 0) return [];
+    if (selectedConfig.days === null) {
+      return [...data].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+    }
+
     const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - currentRange.days);
-    return data.filter(d => new Date(d.date) >= cutoff);
-  }, [data, currentRange.days]);
+    cutoff.setHours(0, 0, 0, 0);
+    cutoff.setDate(cutoff.getDate() - selectedConfig.days);
+
+    return data
+      .filter((d) => new Date(d.date).getTime() >= cutoff.getTime())
+      .sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  }, [data, selectedConfig.days]);
+
+  // Summary Metrics calculations based on selected timeframe
+  const metrics = useMemo(() => {
+    if (filteredData.length === 0) {
+      return { total: 0, avgPerDay: '0.0', peakDay: { date: 'N/A', commits: 0 } };
+    }
+
+    let total = 0;
+    let max = { date: filteredData[0].date, commits: filteredData[0].commits };
+
+    for (const d of filteredData) {
+      total += d.commits;
+      if (d.commits > max.commits) {
+        max = { date: d.date, commits: d.commits };
+      }
+    }
+
+    const activeDays = filteredData.length || 1;
+    const avgPerDay = (total / activeDays).toFixed(1);
+
+    return {
+      total,
+      avgPerDay,
+      peakDay: {
+        date: max.date ? new Date(max.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : 'N/A',
+        commits: max.commits,
+      },
+    };
+  }, [filteredData]);
 
   const option = useMemo(() => {
-    const dates = commitData.map((d: CommitActivity) => d.date);
-    const commits = commitData.map((d: CommitActivity) => d.commits);
+    const dates = filteredData.map((d: CommitActivity) => d.date);
+    const commits = filteredData.map((d: CommitActivity) => d.commits);
 
     return {
       ...CHART_THEME,
@@ -56,6 +125,7 @@ export function CommitActivityChart({ className, data = [] }: CommitActivityChar
             weekday: 'short',
             month: 'short',
             day: 'numeric',
+            year: 'numeric',
           });
           return `
             <div style="padding: 4px 0;">
@@ -69,7 +139,7 @@ export function CommitActivityChart({ className, data = [] }: CommitActivityChar
         },
       },
       grid: {
-        top: 16,
+        top: 20,
         right: 16,
         bottom: 32,
         left: 48,
@@ -155,10 +225,10 @@ export function CommitActivityChart({ className, data = [] }: CommitActivityChar
         },
       ],
       animation: true,
-      animationDuration: 1000,
+      animationDuration: 750,
       animationEasing: 'cubicOut',
     };
-  }, [commitData]);
+  }, [filteredData]);
 
   return (
     <motion.div
@@ -166,40 +236,71 @@ export function CommitActivityChart({ className, data = [] }: CommitActivityChar
       animate={{ opacity: 1, y: 0 }}
       transition={{ type: 'spring', stiffness: 260, damping: 24 }}
       className={cn(
-        'rounded-[20px] border border-white/[0.06] bg-[#111827]/80 p-6 backdrop-blur-xl',
+        'rounded-[24px] border border-white/[0.06] bg-[#111827]/80 p-6 backdrop-blur-xl space-y-6',
         className
       )}
     >
-      <div className="mb-4 flex items-center justify-between">
-        <h3 className="text-sm font-semibold tracking-wide text-slate-200">
-          Commit Activity
-        </h3>
-        <Tabs
-          defaultValue={1}
-          onValueChange={(val) => {
-            const matched = TIME_RANGES[val as number];
-            if (matched) setRange(matched.value);
-          }}
-        >
-          <TabsList className="h-7 rounded-lg bg-white/[0.04] p-0.5">
-            {TIME_RANGES.map((r, index) => (
-              <TabsTrigger
-                key={r.value}
-                value={index}
-                className="h-6 rounded-md px-2.5 text-[11px] font-medium text-slate-400 data-[active]:bg-purple-500/20 data-[active]:text-purple-300"
-              >
-                {r.label}
-              </TabsTrigger>
-            ))}
-          </TabsList>
-        </Tabs>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <h3 className="text-base font-semibold tracking-tight text-white flex items-center gap-2">
+            <GitCommit className="w-4 h-4 text-primary" />
+            Commit Activity
+          </h3>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Real-time contribution frequency and velocity
+          </p>
+        </div>
+
+        {/* Segmented Timeframe Control */}
+        <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-white/[0.04] border border-white/[0.06] self-start sm:self-auto">
+          {TIMEFRAMES.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => handleSelectTimeframe(t.id)}
+              className={cn(
+                'px-3 py-1.5 rounded-lg text-xs font-semibold transition-all duration-200 cursor-pointer',
+                timeframe === t.id
+                  ? 'bg-primary text-primary-foreground shadow-sm'
+                  : 'text-slate-400 hover:text-white hover:bg-white/5'
+              )}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Recalculated Summary Badges */}
+      <div className="grid grid-cols-3 gap-3 p-3.5 rounded-2xl bg-white/[0.02] border border-white/[0.04]">
+        <div className="text-center sm:text-left">
+          <span className="text-[11px] text-muted-foreground uppercase tracking-wider flex items-center justify-center sm:justify-start gap-1">
+            <GitCommit className="w-3 h-3 text-purple-400" /> Commits ({timeframe})
+          </span>
+          <div className="text-lg font-bold text-white mt-0.5">{metrics.total.toLocaleString()}</div>
+        </div>
+        <div className="text-center sm:text-left border-x border-white/[0.06] px-3">
+          <span className="text-[11px] text-muted-foreground uppercase tracking-wider flex items-center justify-center sm:justify-start gap-1">
+            <TrendingUp className="w-3 h-3 text-emerald-400" /> Avg / Day
+          </span>
+          <div className="text-lg font-bold text-emerald-400 mt-0.5">{metrics.avgPerDay}</div>
+        </div>
+        <div className="text-center sm:text-left">
+          <span className="text-[11px] text-muted-foreground uppercase tracking-wider flex items-center justify-center sm:justify-start gap-1">
+            <Calendar className="w-3 h-3 text-amber-400" /> Peak Day
+          </span>
+          <div className="text-lg font-bold text-amber-400 mt-0.5">
+            {metrics.peakDay.commits} <span className="text-xs font-normal text-muted-foreground">({metrics.peakDay.date})</span>
+          </div>
+        </div>
+      </div>
+
       <ReactECharts
         option={option}
         style={{ height: '350px', width: '100%' }}
         opts={{ renderer: 'canvas' }}
         theme="dark"
-        notMerge
+        notMerge={false}
       />
     </motion.div>
   );
