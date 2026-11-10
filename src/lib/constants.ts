@@ -102,6 +102,7 @@ export const NAV_ITEMS = [
   {
     group: "Social",
     items: [
+      { title: "Feed", href: "/feed", icon: "Zap" },
       { title: "Profile", href: "/profile", icon: "User" },
     ],
   },
