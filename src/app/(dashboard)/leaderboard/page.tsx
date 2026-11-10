@@ -21,8 +21,11 @@ import {
   BarChart3,
   ExternalLink,
   X,
+  UserPlus,
+  UserCheck,
 } from "lucide-react";
 import { LeaderboardRowSkeleton, LeaderboardTableSkeleton } from "@/components/leaderboard/leaderboard-skeleton";
+import { useFollowStatus } from "@/hooks/api/use-friends";
 
 const GithubIcon = ({ className }: { className?: string }) => (
   <svg viewBox="0 0 24 24" fill="currentColor" stroke="none" className={className}>
@@ -32,6 +35,68 @@ const GithubIcon = ({ className }: { className?: string }) => (
 import { cn } from "@/lib/utils";
 
 type LeaderboardCategory = "global" | "india" | "friends";
+
+function FollowButton({
+  targetId,
+  targetUsername,
+  initialFollowers = 0,
+}: {
+  targetId: string;
+  targetUsername: string;
+  initialFollowers?: number;
+}) {
+  const { isFollowing, follow, unfollow, isPending } = useFollowStatus(targetId, targetUsername);
+  const [optimisticFollowing, setOptimisticFollowing] = useState(isFollowing);
+  const [followerOffset, setFollowerOffset] = useState(0);
+
+  useEffect(() => {
+    setOptimisticFollowing(isFollowing);
+  }, [isFollowing]);
+
+  const handleToggle = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (optimisticFollowing) {
+      setOptimisticFollowing(false);
+      setFollowerOffset((prev) => prev - 1);
+      unfollow(targetId);
+    } else {
+      setOptimisticFollowing(true);
+      setFollowerOffset((prev) => prev + 1);
+      follow(targetId);
+    }
+  };
+
+  return (
+    <div className="flex flex-col items-end gap-1.5">
+      <button
+        type="button"
+        onClick={handleToggle}
+        disabled={isPending}
+        className={cn(
+          "inline-flex items-center gap-1.5 px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 cursor-pointer shadow-sm",
+          optimisticFollowing
+            ? "bg-white/10 hover:bg-red-500/10 text-white hover:text-red-400 border border-white/10 hover:border-red-500/20"
+            : "bg-primary hover:bg-primary/90 text-primary-foreground shadow-primary/20"
+        )}
+      >
+        {optimisticFollowing ? (
+          <>
+            <UserCheck className="w-3.5 h-3.5 text-emerald-400" />
+            <span>Following</span>
+          </>
+        ) : (
+          <>
+            <UserPlus className="w-3.5 h-3.5" />
+            <span>Follow</span>
+          </>
+        )}
+      </button>
+      <span className="text-[11px] text-muted-foreground font-mono">
+        {Math.max(0, initialFollowers + followerOffset).toLocaleString()} followers
+      </span>
+    </div>
+  );
+}
 
 export default function LeaderboardPage() {
   const router = useRouter();
@@ -253,21 +318,43 @@ export default function LeaderboardPage() {
             </div>
             
             <div className="pt-16 p-6">
-              <h2 className="text-2xl font-bold">{(selectedUser as any).name || (selectedUser as any).username}</h2>
-              <div className="flex items-center gap-2 mt-1">
-                <p className="text-muted-foreground flex items-center gap-1.5 text-sm">
-                  <GithubIcon className="w-4 h-4" /> @{(selectedUser as any).username}
-                </p>
-                <a
-                  href={`https://github.com/${(selectedUser as any).username}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`Open GitHub profile for @${(selectedUser as any).username} in a new tab`}
-                  className="text-muted-foreground/60 hover:text-white transition-colors"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <ExternalLink className="w-3.5 h-3.5" />
-                </a>
+              <div className="flex items-start justify-between gap-4">
+                <div>
+                  <h2 className="text-2xl font-bold">{(selectedUser as any).name || (selectedUser as any).username}</h2>
+                  <div className="flex items-center gap-2 mt-1">
+                    <p className="text-muted-foreground flex items-center gap-1.5 text-sm">
+                      <GithubIcon className="w-4 h-4" /> @{(selectedUser as any).username}
+                    </p>
+                    <a
+                      href={`https://github.com/${(selectedUser as any).username}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      aria-label={`Open GitHub profile for @${(selectedUser as any).username} in a new tab`}
+                      className="text-muted-foreground/60 hover:text-white transition-colors"
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      <ExternalLink className="w-3.5 h-3.5" />
+                    </a>
+                  </div>
+                </div>
+
+                {/* Follow / Unfollow User Action Button */}
+                {(() => {
+                  const currentUsername = (currentUser?.username || "code-with-abhi-i5").toLowerCase();
+                  const targetUsername = ((selectedUser as any)?.username || "").toLowerCase();
+                  const targetId = (selectedUser as any)?.id || (selectedUser as any)?.username;
+                  const isCurrentUser = targetUsername === currentUsername;
+
+                  if (isCurrentUser) return null;
+
+                  return (
+                    <FollowButton
+                      targetId={targetId}
+                      targetUsername={(selectedUser as any)?.username}
+                      initialFollowers={(selectedUser as any)?.followers || 0}
+                    />
+                  );
+                })()}
               </div>
 
               {(selectedUser as any).bio && (
