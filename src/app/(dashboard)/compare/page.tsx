@@ -8,7 +8,7 @@ import { useCurrentUser } from "@/hooks/api/use-auth";
 import { 
   Swords, Search, Trophy, CalendarDays, MapPin, Calendar, GitBranch, Star, Users, Flame,
   TrendingUp, GitCommitHorizontal, GitPullRequest, CircleDot, CodeXml, Coffee, Plus, Minus,
-  Loader2, X, Tent, Crown, AlertCircle, Moon, Sun, Sunset, Code2, Key, RefreshCw
+  Loader2, X, Tent, Crown, AlertCircle, Moon, Sun, Sunset, Code2, Key, RefreshCw, ArrowLeftRight
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -169,13 +169,39 @@ function CompareDashboard() {
       
       // Update URL silently
       const params = new URLSearchParams(searchParams.toString());
+      params.set('user1', q1);
+      params.set('user2', q2);
       params.set('dev1', q1);
       params.set('dev2', q2);
-      router.push(`?${params.toString()}`, { scroll: false });
+      window.history.replaceState(null, '', `?${params.toString()}`);
     } else {
       setError("Could not fetch one or both users. Check if usernames are correct and GitHub API limits.");
     }
     setIsLoading(false);
+  };
+
+  const handleSwap = () => {
+    if (!search1 && !search2 && !dev1 && !dev2) return;
+
+    const newSearch1 = search2;
+    const newSearch2 = search1;
+    const newDev1 = dev2;
+    const newDev2 = dev1;
+
+    setSearch1(newSearch1);
+    setSearch2(newSearch2);
+    setDev1(newDev1);
+    setDev2(newDev2);
+
+    if (newSearch1 && newSearch2) {
+      saveRecent(newSearch1, newSearch2);
+      const params = new URLSearchParams(searchParams.toString());
+      params.set('user1', newSearch1);
+      params.set('user2', newSearch2);
+      params.set('dev1', newSearch1);
+      params.set('dev2', newSearch2);
+      window.history.replaceState(null, '', `?${params.toString()}`);
+    }
   };
 
   const getWinner = () => {
@@ -385,7 +411,17 @@ function CompareDashboard() {
               />
             </div>
             <div className="flex items-center justify-center">
-              <span className="text-xs font-bold text-emerald-500 tracking-widest">VS</span>
+              <button
+                type="button"
+                onClick={handleSwap}
+                disabled={isLoading || (!search1 && !search2)}
+                aria-label="Swap Developer 1 and Developer 2"
+                title="Swap Developers"
+                className="group relative flex items-center justify-center p-2.5 rounded-xl border border-black/10 dark:border-white/10 bg-black/5 dark:bg-white/5 hover:bg-emerald-500/10 hover:border-emerald-500/30 text-gray-700 dark:text-gray-300 hover:text-emerald-500 transition-all duration-200 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                <ArrowLeftRight className="w-4 h-4 transition-transform duration-300 group-hover:rotate-180" />
+                <span className="sr-only">Swap</span>
+              </button>
             </div>
             <div className="relative flex-1">
               <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-[#A1A1AA]" />
@@ -460,16 +496,40 @@ function CompareDashboard() {
         {recentComparisons.length > 0 && (
           <div className="max-w-2xl mx-auto mb-8">
             <div className="flex items-center justify-between mb-3">
-              <span className="text-xs font-medium text-[#A1A1AA] uppercase tracking-wide">Recent Comparisions</span>
-              <button onClick={clearRecent} className="text-xs text-red-500 hover:text-red-600 transition-colors">Clear All</button>
+              <span className="text-xs font-medium text-[#A1A1AA] uppercase tracking-wide">Recent Comparisons</span>
+              <button
+                type="button"
+                onClick={clearRecent}
+                className="text-xs font-semibold px-2.5 py-1 rounded-lg text-red-500 hover:text-red-400 bg-red-500/10 hover:bg-red-500/20 transition-colors"
+              >
+                Clear History
+              </button>
             </div>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-none">
               {recentComparisons.map(rc => (
-                <div key={`${rc.u1}-${rc.u2}`} className="flex items-center gap-1 px-3 py-1 rounded-full border border-black/10 dark:border-white/10 bg-white dark:bg-[#0a0a0a]">
-                  <button onClick={() => { setSearch1(rc.u1); setSearch2(rc.u2); handleCompare(rc.u1, rc.u2); }} className="text-xs text-gray-700 dark:text-gray-300 hover:text-emerald-500 transition-colors">
-                    {rc.u1} vs {rc.u2}
+                <div
+                  key={`${rc.u1}-${rc.u2}`}
+                  className="inline-flex shrink-0 items-center gap-1.5 px-3.5 py-1.5 rounded-full border border-black/10 dark:border-white/10 bg-white/50 dark:bg-[#0a0a0a] backdrop-blur-sm hover:border-emerald-500/30 transition-all shadow-sm"
+                >
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearch1(rc.u1);
+                      setSearch2(rc.u2);
+                      handleCompare(rc.u1, rc.u2);
+                    }}
+                    className="text-xs font-medium text-gray-700 dark:text-gray-300 hover:text-emerald-500 transition-colors"
+                  >
+                    <span className="text-emerald-500 font-semibold">{rc.u1}</span> vs <span className="text-blue-500 font-semibold">{rc.u2}</span>
                   </button>
-                  <button onClick={() => removeRecent(rc.u1, rc.u2)} className="text-xs text-red-400 hover:text-red-600">×</button>
+                  <button
+                    type="button"
+                    onClick={() => removeRecent(rc.u1, rc.u2)}
+                    aria-label={`Remove comparison ${rc.u1} vs ${rc.u2}`}
+                    className="text-xs text-muted-foreground hover:text-red-400 transition-colors ml-0.5"
+                  >
+                    ×
+                  </button>
                 </div>
               ))}
             </div>
