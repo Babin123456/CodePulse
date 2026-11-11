@@ -1,10 +1,16 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { motion } from "motion/react";
+import { useEffect, useState, useSyncExternalStore } from "react";
+import { motion, useReducedMotion } from "motion/react";
 import { cn } from "@/lib/utils";
 import { DIFFICULTY_COLORS } from "@/lib/constants";
+import {
+  isChallengeClaimed,
+  markChallengeClaimed,
+  subscribeToClaimedChallenges,
+} from "@/lib/claimed-challenges";
 import { AnimatedProgress } from "@/components/animations/animated-counter";
+import { ClaimRewardModal } from "@/components/modals/claim-reward-modal";
 import {
   CheckCircle2,
   Clock,
@@ -60,16 +66,43 @@ function getTimeRemaining(expiresAt: string): string {
 interface ChallengeCardProps {
   challenge: Challenge;
   className?: string;
+  /** The user's XP before any reward is claimed. The claim dialog counts up from it. */
+  currentXp?: number;
 }
 
 // ===========================
 // Component
 // ===========================
 
-export function ChallengeCard({ challenge, className }: ChallengeCardProps) {
+export function ChallengeCard({
+  challenge,
+  className,
+  currentXp = 0,
+}: ChallengeCardProps) {
   const [timeLeft, setTimeLeft] = useState(() =>
     getTimeRemaining(challenge.expiresAt)
   );
+  const reduceMotion = useReducedMotion();
+  // The saved claim comes from localStorage. The server snapshot is "not claimed",
+  // so the server render and the first client render match.
+  const hasSavedClaim = useSyncExternalStore(
+    subscribeToClaimedChallenges,
+    () => isChallengeClaimed(challenge.id),
+    () => false
+  );
+  // Still shows "Claimed" for this visit if storage is blocked and nothing could be saved.
+  const [claimedThisVisit, setClaimedThisVisit] = useState(false);
+  const isClaimed = Boolean(challenge.isClaimed) || hasSavedClaim || claimedThisVisit;
+  const [isRewardOpen, setIsRewardOpen] = useState(false);
+  // XP at the moment of claiming, so a later refresh of `currentXp` cannot change the count-up.
+  const [xpBeforeClaim, setXpBeforeClaim] = useState(currentXp);
+
+  const handleClaim = () => {
+    setXpBeforeClaim(currentXp);
+    setClaimedThisVisit(true);
+    markChallengeClaimed(challenge.id);
+    setIsRewardOpen(true);
+  };
 
   useEffect(() => {
     if (challenge.isCompleted) return;
@@ -193,6 +226,43 @@ export function ChallengeCard({ challenge, className }: ChallengeCardProps) {
           />
         </div>
 
+        {/* Claim reward: a completed challenge pays out its XP once */}
+        {challenge.isCompleted && (
+          <div className="mb-4">
+            {isClaimed ? (
+              <button
+                type="button"
+                disabled
+                className="flex w-full items-center justify-center gap-2 rounded-xl border border-white/[0.06] bg-white/[0.04] px-4 py-2.5 text-sm font-semibold text-slate-400"
+              >
+                <Check className="h-4 w-4" aria-hidden="true" />
+                Claimed
+              </button>
+            ) : (
+              <motion.button
+                type="button"
+                onClick={handleClaim}
+                animate={
+                  reduceMotion
+                    ? undefined
+                    : {
+                        boxShadow: [
+                          "0 0 0 0 rgba(251, 191, 36, 0.0)",
+                          "0 0 18px 2px rgba(251, 191, 36, 0.45)",
+                          "0 0 0 0 rgba(251, 191, 36, 0.0)",
+                        ],
+                      }
+                }
+                transition={{ duration: 2, repeat: Infinity, ease: "easeInOut" }}
+                className="flex w-full items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-400 to-emerald-400 px-4 py-2.5 text-sm font-bold text-black focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#111827]"
+              >
+                <Zap className="h-4 w-4" aria-hidden="true" />
+                Claim +{challenge.xpReward} XP
+              </motion.button>
+            )}
+          </div>
+        )}
+
         {/* Footer: XP reward + Type */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-1.5 rounded-full bg-amber-500/10 px-3 py-1">
@@ -205,6 +275,15 @@ export function ChallengeCard({ challenge, className }: ChallengeCardProps) {
             {challenge.type}
           </span>
         </div>
+
+        {challenge.isCompleted && (
+          <ClaimRewardModal
+            isOpen={isRewardOpen}
+            onClose={() => setIsRewardOpen(false)}
+            challenge={challenge}
+            previousXp={xpBeforeClaim}
+          />
+        )}
       </div>
     </motion.div>
   );

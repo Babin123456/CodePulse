@@ -8,6 +8,7 @@ import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Target, Flame, Calendar, Trophy, Sparkles } from "lucide-react";
 
 import { useActiveChallenges } from "@/hooks/api/use-challenges";
+import { useCurrentUser } from "@/hooks/api/use-auth";
 
 const tabs = [
   { id: "all", label: "All", icon: Target },
@@ -20,6 +21,8 @@ const tabs = [
 export default function ChallengesPage() {
   const [activeTab, setActiveTab] = useState("all");
   const { data: activeChallengesData, isLoading } = useActiveChallenges();
+  const { data: currentUser } = useCurrentUser();
+  const currentXp: number = currentUser?.rating?.xp ?? 0;
 
   // Map backend format to frontend format temporarily
   const realChallenges = (activeChallengesData || []).map((c: any) => ({
@@ -158,7 +161,7 @@ export default function ChallengesPage() {
           <StaggerContainer className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {active.map((challenge) => (
               <StaggerItem key={challenge.id}>
-                <ChallengeCard challenge={challenge} />
+                <ChallengeCard challenge={challenge} currentXp={currentXp} />
               </StaggerItem>
             ))}
           </StaggerContainer>
@@ -172,7 +175,7 @@ export default function ChallengesPage() {
           <StaggerContainer className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {completed.map((challenge) => (
               <StaggerItem key={challenge.id}>
-                <ChallengeCard challenge={challenge} />
+                <ChallengeCard challenge={challenge} currentXp={currentXp} />
               </StaggerItem>
             ))}
           </StaggerContainer>
