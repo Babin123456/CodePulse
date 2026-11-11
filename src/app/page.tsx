@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { GithubIcon } from "@/components/icons/github";
 import { Hero3D } from "@/components/sections/hero-3d";
+import { FAQSection } from "@/components/sections/faq-section";
 
 const features = [
   {
@@ -314,6 +315,9 @@ export default function LandingPage() {
           </div>
         </div>
       </section>
+
+      {/* FAQ Section */}
+      <FAQSection />
 
       {/* CTA Section */}
       <section className="py-24 px-6">
