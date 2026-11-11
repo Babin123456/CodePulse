@@ -100,6 +100,8 @@ export interface Challenge {
   progress: number;
   target: number;
   isCompleted: boolean;
+  /** True once the user has claimed the XP reward for a completed challenge. */
+  isClaimed?: boolean;
   expiresAt: string;
   createdAt: string;
   icon: string;
