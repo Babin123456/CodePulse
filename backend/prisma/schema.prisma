@@ -28,6 +28,7 @@ model User {
   joinedAt            DateTime          @default(now())
   updatedAt           DateTime          @updatedAt
   deletedAt           DateTime?
+  xpTransactions      XpTransaction[]
   activities          Activity[]
   battlesAsChallenger Battle[]          @relation("BattleChallenger")
   battlesAsOpponent   Battle[]          @relation("BattleOpponent")
@@ -391,4 +392,17 @@ model LeaderboardCache {
   updatedAt   DateTime @updatedAt
 
   @@map("leaderboard_caches")
+}
+
+model XpTransaction {
+  id          String   @id @default(uuid())
+  userId      String
+  amount      Int
+  source      String
+  description String
+  createdAt   DateTime @default(now())
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt(sort: Desc)])
+  @@map("xp_transactions")
 }
