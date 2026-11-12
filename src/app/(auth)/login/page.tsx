@@ -7,14 +7,31 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Mail, Lock, Eye, EyeOff, ArrowRight, Loader2 } from "lucide-react";
+import {
+  Mail,
+  Lock,
+  Eye,
+  EyeOff,
+  ArrowLeft,
+  ArrowRight,
+  Loader2,
+} from "lucide-react";
 import { GithubIcon } from "@/components/icons/github";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { useQueryClient } from "@tanstack/react-query";
+import { apiClient, extractData } from "@/lib/api-client";
+import { saveAuthToken } from "@/hooks/api/use-auth";
 
 const loginSchema = z.object({
-  email: z.string().email("Please enter a valid email address"),
-  password: z.string().min(6, "Password must be at least 6 characters"),
+  email: z
+    .string()
+    .email("Please enter a valid email address")
+    .max(254, "Email address is too long"),
+  password: z
+    .string()
+    .min(6, "Password must be at least 6 characters")
+    .max(128, "Password must be 128 characters or fewer"),
 });
 
 type LoginForm = z.infer<typeof loginSchema>;
@@ -25,6 +42,7 @@ function LoginForm() {
   const [isGithubLoading, setIsGithubLoading] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
+  const queryClient = useQueryClient();
 
   const {
     register,
@@ -44,8 +62,36 @@ function LoginForm() {
       });
 
       if (error) {
-        toast.error(error.message);
-        return;
+        // Attempt backend login as fallback
+        try {
+          const response = await apiClient.post("/auth/login", data);
+          const result = extractData<{ accessToken: string }>(response);
+          if (result?.accessToken) {
+            saveAuthToken(result.accessToken);
+            await queryClient.invalidateQueries({
+              queryKey: ["auth", "current-user"],
+            });
+            toast.success("Welcome back!");
+            const redirectTo = searchParams.get("redirectTo") || "/dashboard";
+            router.push(redirectTo);
+            router.refresh();
+            return;
+          }
+        } catch {
+          toast.error(error.message);
+          return;
+        }
+      }
+
+      // Also sync token with backend if available
+      try {
+        const response = await apiClient.post("/auth/login", data);
+        const result = extractData<{ accessToken: string }>(response);
+        if (result?.accessToken) {
+          saveAuthToken(result.accessToken);
+        }
+      } catch {
+        // Ignore backend sync failure if Supabase succeeded
       }
 
       toast.success("Welcome back!");
@@ -107,8 +153,7 @@ function LoginForm() {
             className="max-w-md"
           >
             <h2 className="text-4xl font-bold mb-4 leading-tight">
-              Your GitHub,{" "}
-              <span className="gradient-text">Gamified.</span>
+              Your GitHub, <span className="gradient-text">Gamified.</span>
             </h2>
             <p className="text-lg text-muted-foreground">
               Track your coding journey, compete with developers worldwide, and
@@ -129,8 +174,12 @@ function LoginForm() {
                   transition={{ delay: 0.5 + i * 0.1 }}
                   className="glass-card rounded-2xl p-4 text-center"
                 >
-                  <div className="text-xl font-bold gradient-text">{stat.value}</div>
-                  <div className="text-xs text-muted-foreground mt-1">{stat.label}</div>
+                  <div className="text-xl font-bold gradient-text">
+                    {stat.value}
+                  </div>
+                  <div className="text-xs text-muted-foreground mt-1">
+                    {stat.label}
+                  </div>
                 </motion.div>
               ))}
             </div>
@@ -144,14 +193,16 @@ function LoginForm() {
             className="glass-card rounded-2xl p-6 max-w-md"
           >
             <p className="text-sm text-muted-foreground italic">
-              &ldquo;CodePulse transformed how I track my coding progress. The gamification
-              makes coding addictive in the best way.&rdquo;
+              &ldquo;CodePulse transformed how I track my coding progress. The
+              gamification makes coding addictive in the best way.&rdquo;
             </p>
             <div className="flex items-center gap-3 mt-3">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-blue-500" />
               <div>
                 <div className="text-sm font-medium">Sarah Chen</div>
-                <div className="text-xs text-muted-foreground">Senior Dev @ TechCorp</div>
+                <div className="text-xs text-muted-foreground">
+                  Senior Dev @ TechCorp
+                </div>
               </div>
             </div>
           </motion.div>
@@ -173,6 +224,14 @@ function LoginForm() {
             </div>
             <span className="text-xl font-bold gradient-text">CodePulse</span>
           </div>
+
+          <Link
+            href="/"
+            className="mb-6 inline-flex items-center gap-2 text-sm text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <ArrowLeft className="h-4 w-4" />
+            Back to home
+          </Link>
 
           <h1 className="text-3xl font-bold mb-2">Welcome back</h1>
           <p className="text-muted-foreground mb-8">
@@ -217,7 +276,9 @@ function LoginForm() {
                 />
               </div>
               {errors.email && (
-                <p className="text-xs text-red-400 mt-1.5">{errors.email.message}</p>
+                <p className="text-xs text-red-400 mt-1.5">
+                  {errors.email.message}
+                </p>
               )}
             </div>
 
@@ -225,7 +286,7 @@ function LoginForm() {
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-sm font-medium">Password</label>
                 <Link
-                  href="#"
+                  href="/forgot-password"
                   className="text-xs text-primary hover:text-primary/80 transition-colors"
                 >
                   Forgot password?
@@ -252,7 +313,9 @@ function LoginForm() {
                 </button>
               </div>
               {errors.password && (
-                <p className="text-xs text-red-400 mt-1.5">{errors.password.message}</p>
+                <p className="text-xs text-red-400 mt-1.5">
+                  {errors.password.message}
+                </p>
               )}
             </div>
 
@@ -273,8 +336,11 @@ function LoginForm() {
           </form>
 
           <p className="mt-8 text-center text-sm text-muted-foreground">
-            Don't have an account?{" "}
-            <Link href="/signup" className="text-blue-500 hover:text-blue-400 font-medium transition-colors">
+            Don&apos;t have an account?{" "}
+            <Link
+              href="/signup"
+              className="text-blue-500 hover:text-blue-400 font-medium transition-colors"
+            >
               Sign up
             </Link>
           </p>

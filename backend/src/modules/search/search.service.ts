@@ -24,6 +24,7 @@ export class SearchService {
       }),
       this.prisma.repository.findMany({
         where: {
+          archivedAt: null,
           OR: [
             { name: { contains: query, mode: 'insensitive' } },
             { description: { contains: query, mode: 'insensitive' } },

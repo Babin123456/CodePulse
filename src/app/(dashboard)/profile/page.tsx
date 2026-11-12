@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { motion } from "motion/react";
 import { StaggerContainer, StaggerItem } from "@/components/animations/page-transition";
 import { AnimatedCounter, AnimatedProgress } from "@/components/animations/animated-counter";
@@ -12,8 +13,9 @@ import { useCurrentUser } from "@/hooks/api/use-auth";
 import { GithubIcon } from "@/components/icons/github";
 import {
   MapPin, Building, Globe, Calendar, Star, GitFork, Users, GitCommit,
-  GitPullRequest, Eye, Flame, Code, ExternalLink, Crown,
+  GitPullRequest, Eye, Flame, Code, ExternalLink, Crown, QrCode,
 } from "lucide-react";
+import { ProfileQrModal } from "@/components/modals/profile-qr-modal";
 
 export default function ProfilePage() {
   const { data: user, isLoading } = useCurrentUser();
@@ -86,6 +88,7 @@ export default function ProfilePage() {
   const displayActivities = user.activities || [];
   const displayLanguages = user.languages || [];
   const contributionData = user.stats?.contributionData || [];
+  const [isQrModalOpen, setIsQrModalOpen] = useState(false);
 
   return (
     <div className="space-y-6">
@@ -146,6 +149,13 @@ export default function ProfilePage() {
                 );
               })}
               <span className="flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" />Joined {joinedDate}</span>
+              <button
+                onClick={() => setIsQrModalOpen(true)}
+                className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-medium transition-all"
+              >
+                <QrCode className="w-3.5 h-3.5 text-purple-400" />
+                Share QR
+              </button>
             </div>
 
             {/* Followers/Following */}
@@ -199,6 +209,12 @@ export default function ProfilePage() {
           );
         })}
       </StaggerContainer>
+
+      <ProfileQrModal
+        isOpen={isQrModalOpen}
+        onClose={() => setIsQrModalOpen(false)}
+        user={user}
+      />
 
       {/* Badges */}
       {displayBadges.length > 0 && (

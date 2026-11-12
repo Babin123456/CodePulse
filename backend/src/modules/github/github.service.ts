@@ -125,6 +125,7 @@ export class GithubService {
               totalRepositoryContributions
             }
             repositories(first: 100, ownerAffiliations: [OWNER, COLLABORATOR, ORGANIZATION_MEMBER], orderBy: {field: CREATED_AT, direction: DESC}) {
+              pageInfo { hasNextPage }
               nodes {
                 id
                 name
@@ -226,7 +227,7 @@ export class GithubService {
   /**
    * Fetches public user activity events from GitHub REST API.
    */
-  async fetchUserEvents(username: string, accessToken?: string, limit: number = 30) {
+  async fetchUserEvents(username: string, accessToken?: string, limit: number = 30, strict: boolean = false) {
     try {
       const response = await axios.get(
         `https://api.github.com/users/${username}/events/public`,
@@ -238,6 +239,7 @@ export class GithubService {
       return response.data;
     } catch (error: any) {
       this.logger.error(`Error fetching GitHub events for ${username}:`, error.message);
+      if (strict) throw error;
       return [];
     }
   }

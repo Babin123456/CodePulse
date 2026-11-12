@@ -8,6 +8,7 @@ import { BattleIntro } from "@/components/battles/battle-intro";
 import { BattleRounds } from "@/components/battles/battle-rounds";
 import { BattleReport } from "@/components/battles/battle-report";
 import { BattleMatchmakingSkeleton } from "@/components/battles/battle-skeleton";
+import { BattleHistoryList, type HistoricalBattle } from "@/components/battles/battle-history-list";
 import { useCurrentUser } from "@/hooks/api/use-auth";
 
 type BattlePhase = "SETUP" | "INTRO" | "ROUNDS" | "REPORT";
@@ -21,6 +22,59 @@ export default function BattlesPage() {
   const [initialP2, setInitialP2] = useState("");
 
   const [isIntroFinished, setIsIntroFinished] = useState(false);
+  const [battleHistory, setBattleHistory] = useState<HistoricalBattle[]>([]);
+
+  // Load history from localStorage
+  useEffect(() => {
+    if (typeof window !== "undefined") {
+      try {
+        const saved = localStorage.getItem("devbattle_battle_history");
+        if (saved) {
+          setBattleHistory(JSON.parse(saved));
+        }
+      } catch (e) {
+        console.error("Failed to load battle history:", e);
+      }
+    }
+  }, []);
+
+  const saveBattleToHistory = (p1: any, p2: any, battleType: string) => {
+    try {
+      const calc = (s: any) =>
+        (s?.totalCommits || 0) * 1 +
+        (s?.totalPRs || 0) * 5 +
+        (s?.totalStars || 0) * 10 +
+        (s?.followers || 0) * 2 +
+        (s?.streak || 0) * 5;
+
+      const p1Score = p1?.score || calc(p1?.stats) || 85;
+      const p2Score = p2?.score || calc(p2?.stats) || 70;
+      const winner = p1Score > p2Score ? "p1" : p1Score < p2Score ? "p2" : "draw";
+      const xpChange = Math.abs(Math.round((p1Score - p2Score) * 0.15)) + 15;
+
+      const newRecord: HistoricalBattle = {
+        id: `battle-${Date.now()}`,
+        player1: p1,
+        player2: p2,
+        battleType,
+        winner,
+        p1Score,
+        p2Score,
+        xpChange,
+        createdAt: new Date().toISOString(),
+      };
+
+      setBattleHistory((prev) => {
+        const updated = [newRecord, ...prev.filter((b) => b.id !== newRecord.id)].slice(0, 20);
+        if (typeof window !== "undefined") {
+          localStorage.setItem("devbattle_battle_history", JSON.stringify(updated));
+        }
+        return updated;
+      });
+    } catch (e) {
+      console.error("Error saving battle history:", e);
+    }
+  };
 
   // Read URL query parameters (e.g. /battles?p2=<username>)
   useEffect(() => {
@@ -97,11 +151,27 @@ export default function BattlesPage() {
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0, scale: 0.95 }}
+            className="space-y-6"
           >
             <BattleSetup
               onStart={startGhostBattle}
               initialPlayer1={initialP1}
               initialPlayer2={initialP2}
+            />
+
+            <BattleHistoryList
+              battles={battleHistory}
+              onReplay={(battle) => {
+                setGhostBattleData({
+                  p1: battle.player1,
+                  p2: battle.player2,
+                  battleType: battle.battleType,
+                });
+                setPhase("REPORT");
+              }}
+              onStartNew={() => {
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
             />
           </motion.div>
         )}
@@ -142,7 +212,10 @@ export default function BattlesPage() {
               player1={ghostBattleData.p1} 
               player2={ghostBattleData.p2} 
               battleType={ghostBattleData.battleType}
-              onComplete={() => setPhase("REPORT")} 
+              onComplete={() => {
+                saveBattleToHistory(ghostBattleData.p1, ghostBattleData.p2, ghostBattleData.battleType);
+                setPhase("REPORT");
+              }} 
             />
           </motion.div>
         )}

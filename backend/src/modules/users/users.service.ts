@@ -18,7 +18,7 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException(`User @${username} not found`);
     }
-    return user;
+    return this.withoutCredentials(user);
   }
 
   async getProfile(userId: string) {
@@ -31,10 +31,10 @@ export class UsersService {
         repositories: true,
         activities: {
           orderBy: { createdAt: 'desc' },
-          take: 20
+          take: 20,
         },
         badges: {
-          include: { badge: true }
+          include: { badge: true },
         },
       },
     });
@@ -42,13 +42,23 @@ export class UsersService {
     if (!user) {
       throw new NotFoundException('User profile not found');
     }
-    return user;
+    return this.withoutCredentials(user);
   }
 
   async updateProfile(userId: string, data: UpdateUserDto) {
-    return this.prisma.user.update({
+    const user = await this.prisma.user.update({
       where: { id: userId },
       data,
     });
+    return this.withoutCredentials(user);
+  }
+
+  private withoutCredentials<
+    T extends { passwordHash: string | null; authEmail: string | null },
+  >(user: T): Omit<T, 'passwordHash' | 'authEmail'> {
+    const { passwordHash, authEmail, ...safeUser } = user;
+    void passwordHash;
+    void authEmail;
+    return safeUser;
   }
 }

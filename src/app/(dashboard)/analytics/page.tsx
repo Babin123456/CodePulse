@@ -9,6 +9,7 @@ import { RadarCompareChart } from "@/components/charts/radar-compare-chart";
 import { GithubWrappedBanner } from "@/components/charts/github-wrapped-banner";
 import { RepositoryBubbleChart } from "@/components/charts/repository-bubble-chart";
 import { GlobalRankingMeter } from "@/components/charts/global-ranking-meter";
+import { PrReviewVelocityCard } from "@/components/cards/pr-review-velocity-card";
 import { StaggerContainer, StaggerItem } from "@/components/animations/page-transition";
 import { AnimatedCounter } from "@/components/animations/animated-counter";
 import { useCurrentUser } from "@/hooks/api/use-auth";
@@ -187,6 +188,11 @@ export default function AnalyticsPage() {
             <div className="absolute top-0 right-0 w-48 h-48 bg-blue-500/10 rounded-full blur-3xl pointer-events-none group-hover:bg-blue-500/20 transition-colors duration-700" />
             <LanguageDistribution data={languages} />
           </div>
+        </StaggerItem>
+
+        {/* PR & Review Velocity Breakdown (Span 12) */}
+        <StaggerItem className="md:col-span-12">
+          <PrReviewVelocityCard stats={stats} />
         </StaggerItem>
 
         {/* Commit Activity (Span 12) */}

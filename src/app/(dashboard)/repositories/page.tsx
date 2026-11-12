@@ -13,6 +13,7 @@ import {
 import { useCurrentUser } from "@/hooks/api/use-auth";
 import { Loader2 } from "lucide-react";
 import { RepoQuickView } from "@/components/modals/repo-quick-view";
+import { CopyCloneCommand } from "@/components/repositories/copy-clone-command";
 
 const sortOptions = [
   { id: "stars", label: "Highest Stars" },
@@ -297,7 +298,7 @@ export default function RepositoriesPage() {
         </div>
 
         <div className={cn(
-          "flex items-center justify-between shrink-0",
+          "flex flex-wrap items-center justify-between gap-y-2 shrink-0",
           viewMode === "grid" ? "pt-4 border-t border-white/5 mt-auto" : "pl-6 border-l border-white/5 gap-6"
         )}>
           <div className="flex items-center gap-4 text-sm">
@@ -327,6 +328,7 @@ export default function RepositoriesPage() {
             >
               <Share2 className="w-4 h-4" />
             </button>
+            {repo.fullName && <CopyCloneCommand fullName={repo.fullName} />}
             <button 
               onClick={(e) => togglePin(repo.id, e)}
               className={cn("p-2 rounded-lg transition-colors cursor-pointer", isPinned ? "text-primary bg-primary/10" : "text-muted-foreground hover:text-white hover:bg-white/10")}

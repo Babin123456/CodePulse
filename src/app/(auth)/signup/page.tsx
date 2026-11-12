@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   Mail,
   Lock,
@@ -21,12 +22,25 @@ import {
 import { GithubIcon } from "@/components/icons/github";
 import { toast } from "sonner";
 import { createClient } from "@/lib/supabase/client";
+import { apiClient, extractData } from "@/lib/api-client";
+import { saveAuthToken } from "@/hooks/api/use-auth";
 
 const signupSchema = z
   .object({
-    name: z.string().min(2, "Name must be at least 2 characters"),
-    email: z.string().email("Please enter a valid email address"),
-    password: z.string().min(8, "Password must be at least 8 characters"),
+    name: z
+      .string()
+      .refine(
+        (value) => value.trim().length >= 2,
+        "Name must be at least 2 characters",
+      ),
+    email: z
+      .string()
+      .email("Please enter a valid email address")
+      .max(254, "Email address is too long"),
+    password: z
+      .string()
+      .min(8, "Password must be at least 8 characters")
+      .max(128, "Password must be 128 characters or fewer"),
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -49,6 +63,7 @@ export default function SignupPage() {
   const [isGithubLoading, setIsGithubLoading] = useState(false);
   const [selectedInterests, setSelectedInterests] = useState<string[]>([]);
   const router = useRouter();
+  const queryClient = useQueryClient();
 
   const {
     register,
@@ -59,13 +74,40 @@ export default function SignupPage() {
   });
 
   const interests = [
-    "Frontend", "Backend", "Full-Stack", "DevOps", "ML/AI",
-    "Mobile", "Systems", "Open Source", "Security", "Data",
+    "Frontend",
+    "Backend",
+    "Full-Stack",
+    "DevOps",
+    "ML/AI",
+    "Mobile",
+    "Systems",
+    "Open Source",
+    "Security",
+    "Data",
   ];
 
   const onSubmit = async (data: SignupForm) => {
     setIsLoading(true);
     try {
+      // Register in backend if available
+      try {
+        const response = await apiClient.post("/auth/register", {
+          name: data.name,
+          email: data.email,
+          password: data.password,
+          interests: selectedInterests,
+        });
+        const result = extractData<{ accessToken: string }>(response);
+        if (result?.accessToken) {
+          saveAuthToken(result.accessToken);
+          await queryClient.invalidateQueries({
+            queryKey: ["auth", "current-user"],
+          });
+        }
+      } catch {
+        // Continue to Supabase signup even if local backend is unconfigured
+      }
+
       const supabase = createClient();
       const { error } = await supabase.auth.signUp({
         email: data.email,
@@ -124,9 +166,9 @@ export default function SignupPage() {
         <div className="relative z-10 flex flex-col justify-between p-12 w-full">
           <Link href="/" className="flex items-center gap-2">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-blue-600 flex items-center justify-center">
-              <span className="text-white font-bold text-lg">D</span>
+              <span className="text-white font-bold text-lg">C</span>
             </div>
-            <span className="text-xl font-bold gradient-text">DevBattle</span>
+            <span className="text-xl font-bold gradient-text">CodePulse</span>
           </Link>
 
           <motion.div
@@ -136,12 +178,11 @@ export default function SignupPage() {
             className="max-w-md"
           >
             <h2 className="text-4xl font-bold mb-4 leading-tight">
-              Start your{" "}
-              <span className="gradient-text">coding journey</span>
+              Start your <span className="gradient-text">coding journey</span>
             </h2>
             <p className="text-lg text-muted-foreground">
-              Join 250,000+ developers who are tracking their growth,
-              competing in challenges, and leveling up their skills.
+              Join 250,000+ developers who are tracking their growth, competing
+              in challenges, and leveling up their skills.
             </p>
 
             {/* Features */}
@@ -162,14 +203,16 @@ export default function SignupPage() {
                   <div className="w-6 h-6 rounded-full bg-emerald-500/20 flex items-center justify-center shrink-0">
                     <Check className="w-3.5 h-3.5 text-emerald-400" />
                   </div>
-                  <span className="text-sm text-muted-foreground">{feature}</span>
+                  <span className="text-sm text-muted-foreground">
+                    {feature}
+                  </span>
                 </motion.div>
               ))}
             </div>
           </motion.div>
 
           <div className="text-xs text-muted-foreground">
-            © 2024 DevBattle. All rights reserved.
+            © 2026 CodePulse. All rights reserved.
           </div>
         </div>
       </div>
@@ -238,13 +281,17 @@ export default function SignupPage() {
 
               <div className="flex items-center gap-3 mb-6">
                 <div className="flex-1 h-px bg-white/10" />
-                <span className="text-xs text-muted-foreground uppercase tracking-wider">or</span>
+                <span className="text-xs text-muted-foreground uppercase tracking-wider">
+                  or
+                </span>
                 <div className="flex-1 h-px bg-white/10" />
               </div>
 
               <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                 <div>
-                  <label className="text-sm font-medium mb-1.5 block">Full Name</label>
+                  <label className="text-sm font-medium mb-1.5 block">
+                    Full Name
+                  </label>
                   <div className="relative">
                     <User className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input
@@ -254,11 +301,17 @@ export default function SignupPage() {
                       {...register("name")}
                     />
                   </div>
-                  {errors.name && <p className="text-xs text-red-400 mt-1.5">{errors.name.message}</p>}
+                  {errors.name && (
+                    <p className="text-xs text-red-400 mt-1.5">
+                      {errors.name.message}
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium mb-1.5 block">Email</label>
+                  <label className="text-sm font-medium mb-1.5 block">
+                    Email
+                  </label>
                   <div className="relative">
                     <Mail className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input
@@ -268,11 +321,17 @@ export default function SignupPage() {
                       {...register("email")}
                     />
                   </div>
-                  {errors.email && <p className="text-xs text-red-400 mt-1.5">{errors.email.message}</p>}
+                  {errors.email && (
+                    <p className="text-xs text-red-400 mt-1.5">
+                      {errors.email.message}
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium mb-1.5 block">Password</label>
+                  <label className="text-sm font-medium mb-1.5 block">
+                    Password
+                  </label>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input
@@ -286,14 +345,24 @@ export default function SignupPage() {
                       onClick={() => setShowPassword(!showPassword)}
                       className="absolute right-3.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground transition-colors"
                     >
-                      {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      {showPassword ? (
+                        <EyeOff className="w-4 h-4" />
+                      ) : (
+                        <Eye className="w-4 h-4" />
+                      )}
                     </button>
                   </div>
-                  {errors.password && <p className="text-xs text-red-400 mt-1.5">{errors.password.message}</p>}
+                  {errors.password && (
+                    <p className="text-xs text-red-400 mt-1.5">
+                      {errors.password.message}
+                    </p>
+                  )}
                 </div>
 
                 <div>
-                  <label className="text-sm font-medium mb-1.5 block">Confirm Password</label>
+                  <label className="text-sm font-medium mb-1.5 block">
+                    Confirm Password
+                  </label>
                   <div className="relative">
                     <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
                     <input
@@ -303,7 +372,11 @@ export default function SignupPage() {
                       {...register("confirmPassword")}
                     />
                   </div>
-                  {errors.confirmPassword && <p className="text-xs text-red-400 mt-1.5">{errors.confirmPassword.message}</p>}
+                  {errors.confirmPassword && (
+                    <p className="text-xs text-red-400 mt-1.5">
+                      {errors.confirmPassword.message}
+                    </p>
+                  )}
                 </div>
 
                 <button
@@ -341,8 +414,8 @@ export default function SignupPage() {
                 </div>
                 <h3 className="font-semibold mb-2">GitHub Authorization</h3>
                 <p className="text-sm text-muted-foreground mb-6">
-                  We&apos;ll access your public profile, repositories, and contribution data.
-                  We never modify your code or settings.
+                  We&apos;ll access your public profile, repositories, and
+                  contribution data. We never modify your code or settings.
                 </p>
                 <button
                   onClick={handleGithubSignUp}
@@ -396,7 +469,7 @@ export default function SignupPage() {
                       setSelectedInterests((prev) =>
                         prev.includes(interest)
                           ? prev.filter((i) => i !== interest)
-                          : [...prev, interest]
+                          : [...prev, interest],
                       )
                     }
                     className={`px-4 py-2 rounded-xl text-sm font-medium transition-all ${
@@ -422,7 +495,7 @@ export default function SignupPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    toast.success("Welcome to DevBattle! 🎉");
+                    toast.success("Welcome to CodePulse! 🎉");
                     router.push("/dashboard");
                   }}
                   className="flex-1 flex items-center justify-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-purple-600 to-blue-600 text-white font-medium"
@@ -436,7 +509,10 @@ export default function SignupPage() {
 
           <p className="text-sm text-muted-foreground text-center mt-6">
             Already have an account?{" "}
-            <Link href="/login" className="text-primary hover:text-primary/80 font-medium transition-colors">
+            <Link
+              href="/login"
+              className="text-primary hover:text-primary/80 font-medium transition-colors"
+            >
               Sign in
             </Link>
           </p>

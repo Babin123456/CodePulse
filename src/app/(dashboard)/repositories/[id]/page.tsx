@@ -8,6 +8,7 @@ import { StaggerContainer, StaggerItem } from "@/components/animations/page-tran
 import { AnimatedCounter, AnimatedProgress, AnimatedRing } from "@/components/animations/animated-counter";
 import { formatNumber, cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/api/use-auth";
+import { RepoStarGrowthChart } from "@/components/charts/repo-star-growth-chart";
 import {
   ArrowLeft, Code, Star, GitFork, Eye, AlertCircle, GitPullRequest,
   Users, HardDrive, Calendar, Activity, ExternalLink, Shield, Zap,
@@ -577,6 +578,11 @@ export default function RepositoryDeepAnalysisPage() {
             transition={{ duration: 0.3 }}
           >
             <StaggerContainer className="space-y-8">
+              {/* ── Star Growth & Velocity Forecast ── */}
+              <StaggerItem>
+                <RepoStarGrowthChart repo={repo} />
+              </StaggerItem>
+
               {/* ── AI Insights Cards ── */}
               <StaggerItem>
                 <div className="glass-card rounded-[28px] p-8 border border-white/5 relative overflow-hidden">

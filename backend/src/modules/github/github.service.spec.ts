@@ -229,5 +229,10 @@ describe('GithubService', () => {
       }
     });
   });
+  it('propagates event failures for strict sync callers while keeping proxy fallback behavior', async () => {
+    mockedAxios.get.mockRejectedValue(new Error('offline'));
+    await expect(service.fetchUserEvents('owner', 'token', 30, true)).rejects.toThrow('offline');
+    await expect(service.fetchUserEvents('owner', 'token')).resolves.toEqual([]);
+  });
 });
 
