@@ -13,6 +13,7 @@ import {
   Loader2,
   Users,
   Flag,
+  Globe,
   Star,
   GitFork,
   BookOpen,
@@ -33,10 +34,31 @@ import { cn } from "@/lib/utils";
 
 type LeaderboardCategory = "global" | "india" | "friends";
 
+const CATEGORY_META: Record<
+  LeaderboardCategory,
+  { title: string; description: string; icon: any }
+> = {
+  global: {
+    title: "Global Developer Rankings",
+    description: "Discover top developers, innovators, and open source contributors worldwide.",
+    icon: Globe,
+  },
+  india: {
+    title: "India Rankings",
+    description: "Top open-source contributors and active developers across India.",
+    icon: Flag,
+  },
+  friends: {
+    title: "Friends Rankings",
+    description: "Compete with your GitHub network and see who ranks at the top.",
+    icon: Users,
+  },
+};
+
 export default function LeaderboardPage() {
   const router = useRouter();
   const { data: currentUser } = useCurrentUser();
-  const [activeTab, setActiveTab] = useState<LeaderboardCategory>("friends");
+  const [activeTab, setActiveTab] = useState<LeaderboardCategory>("global");
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [selectedUser, setSelectedUser] = useState<string | null>(null);
@@ -79,35 +101,73 @@ export default function LeaderboardPage() {
     ? [] 
     : users;
 
+  const ActiveIcon = CATEGORY_META[activeTab].icon;
+
   return (
     <div className="space-y-8 pb-20">
       {/* Header */}
       <div className="sticky top-0 z-40 bg-background/80 backdrop-blur-xl border-b border-white/5 py-6 px-2 -mx-2">
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 max-w-6xl mx-auto">
-          <div>
-            <h1 className="text-3xl font-extrabold flex items-center gap-3 bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">
-              <Users className="w-8 h-8 text-primary" />
-              Friends Rankings
-            </h1>
-            <p className="text-muted-foreground mt-2">
-              Compete with your GitHub network and see who ranks at the top.
-            </p>
-          </div>
-          
-          <div className="flex items-center gap-4">
-            <div className="relative group">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground transition-colors group-focus-within:text-primary" aria-hidden="true" />
-              <input
-                type="text"
-                placeholder="Search username..."
-                value={searchQuery}
-                aria-label="Search developer by GitHub username"
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 w-full sm:w-64 transition-all"
-              />
+        <div className="flex flex-col gap-6 max-w-6xl mx-auto">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+            <div>
+              <h1 className="text-3xl font-extrabold flex items-center gap-3 bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">
+                <ActiveIcon className="w-8 h-8 text-primary" />
+                {CATEGORY_META[activeTab].title}
+              </h1>
+              <p className="text-muted-foreground mt-2">
+                {CATEGORY_META[activeTab].description}
+              </p>
             </div>
+            
+            <div className="flex items-center gap-4">
+              <div className="relative group">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground transition-colors group-focus-within:text-primary" aria-hidden="true" />
+                <input
+                  type="text"
+                  placeholder="Search username..."
+                  value={searchQuery}
+                  aria-label="Search developer by GitHub username"
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-10 pr-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-sm placeholder:text-muted-foreground/50 focus:outline-none focus:border-primary/50 focus:ring-1 focus:ring-primary/50 w-full sm:w-64 transition-all"
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Category Tabs */}
+          <Tabs
+            value={activeTab}
+            onValueChange={(val) => {
+              setActiveTab(val as LeaderboardCategory);
+              setSearchQuery("");
+            }}
+            aria-label="Filter leaderboard category"
+          >
+            <TabsList className="bg-white/[0.03] border border-white/5 p-1 rounded-2xl h-auto gap-1">
+              <TabsTrigger
+                value="global"
+                className="rounded-xl px-4 py-2 text-xs font-semibold gap-2 data-active:bg-primary data-active:text-white transition-all cursor-pointer"
+              >
+                <Globe className="w-4 h-4" />
+                <span>Global</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="india"
+                className="rounded-xl px-4 py-2 text-xs font-semibold gap-2 data-active:bg-primary data-active:text-white transition-all cursor-pointer"
+              >
+                <Flag className="w-4 h-4" />
+                <span>India</span>
+              </TabsTrigger>
+              <TabsTrigger
+                value="friends"
+                className="rounded-xl px-4 py-2 text-xs font-semibold gap-2 data-active:bg-primary data-active:text-white transition-all cursor-pointer"
+              >
+                <Users className="w-4 h-4" />
+                <span>Friends</span>
+              </TabsTrigger>
+            </TabsList>
+          </Tabs>
         </div>
-      </div>
       </div>
 
       {/* Main Content */}
