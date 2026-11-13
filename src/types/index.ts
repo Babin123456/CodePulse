@@ -94,7 +94,7 @@ export interface Challenge {
   id: string;
   title: string;
   description: string;
-  type: "daily" | "weekly" | "monthly" | "seasonal";
+  type: "daily" | "weekly" | "monthly" | "seasonal" | "custom" | string;
   difficulty: "easy" | "medium" | "hard" | "legendary";
   xpReward: number;
   progress: number;
@@ -102,6 +102,9 @@ export interface Challenge {
   isCompleted: boolean;
   /** True once the user has claimed the XP reward for a completed challenge. */
   isClaimed?: boolean;
+  /** True if this is a user-created personal custom quest. */
+  isCustom?: boolean;
+  metricType?: string;
   expiresAt: string;
   createdAt: string;
   icon: string;
