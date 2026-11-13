@@ -22,6 +22,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useQueryClient } from "@tanstack/react-query";
 import { apiClient, extractData } from "@/lib/api-client";
 import { saveAuthToken } from "@/hooks/api/use-auth";
+import { ForgotPasswordModal } from "@/components/modals/forgot-password-modal";
 
 const loginSchema = z.object({
   email: z
@@ -40,6 +41,7 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [isGithubLoading, setIsGithubLoading] = useState(false);
+  const [isForgotPasswordOpen, setIsForgotPasswordOpen] = useState(false);
   const router = useRouter();
   const searchParams = useSearchParams();
   const queryClient = useQueryClient();
@@ -47,6 +49,7 @@ function LoginForm() {
   const {
     register,
     handleSubmit,
+    getValues,
     formState: { errors },
   } = useForm<LoginForm>({
     resolver: zodResolver(loginSchema),
@@ -98,8 +101,9 @@ function LoginForm() {
       const redirectTo = searchParams.get("redirectTo") || "/dashboard";
       router.push(redirectTo);
       router.refresh();
-    } catch (err: any) {
-      toast.error(err.message || "Failed to sign in");
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : "Failed to sign in";
+      toast.error(message);
     } finally {
       setIsLoading(false);
     }
@@ -121,8 +125,10 @@ function LoginForm() {
         toast.error(error.message);
         setIsGithubLoading(false);
       }
-    } catch (err: any) {
-      toast.error(err.message || "Failed to start GitHub login");
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "Failed to start GitHub login";
+      toast.error(message);
       setIsGithubLoading(false);
     }
   };
@@ -285,12 +291,13 @@ function LoginForm() {
             <div>
               <div className="flex items-center justify-between mb-1.5">
                 <label className="text-sm font-medium">Password</label>
-                <Link
-                  href="/forgot-password"
-                  className="text-xs text-primary hover:text-primary/80 transition-colors"
+                <button
+                  type="button"
+                  onClick={() => setIsForgotPasswordOpen(true)}
+                  className="text-xs text-primary hover:text-primary/80 transition-colors cursor-pointer"
                 >
                   Forgot password?
-                </Link>
+                </button>
               </div>
               <div className="relative">
                 <Lock className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -346,6 +353,12 @@ function LoginForm() {
           </p>
         </motion.div>
       </div>
+
+      <ForgotPasswordModal
+        isOpen={isForgotPasswordOpen}
+        onClose={() => setIsForgotPasswordOpen(false)}
+        defaultEmail={getValues("email")}
+      />
     </div>
   );
 }
