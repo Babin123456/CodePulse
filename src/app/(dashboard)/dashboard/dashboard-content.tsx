@@ -11,7 +11,9 @@ import { AnimatedCounter } from "@/components/animations/animated-counter";
 import { useCurrentUser } from "@/hooks/api/use-auth";
 import { useActiveChallenges } from "@/hooks/api/use-challenges";
 import { useLeaderboardInfinite } from "@/hooks/api/use-leaderboard";
-import { GitCommit, GitPullRequest, Flame, Star, Loader2, Trophy, Swords } from "lucide-react";
+import { useSyncGitHub } from "@/hooks/api/use-sync";
+import { Tooltip, TooltipTrigger, TooltipContent } from "@/components/ui/tooltip";
+import { GitCommit, GitPullRequest, Flame, Star, Loader2, Trophy, Swords, RefreshCw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 const iconMap: Record<string, React.ElementType> = {
@@ -25,6 +27,16 @@ export function DashboardContent() {
   const { data: currentUser, isLoading } = useCurrentUser();
   const { data: challengesData } = useActiveChallenges();
   const { data: leaderboardData, isLoading: isLeaderboardLoading } = useLeaderboardInfinite("friends", 5);
+  const {
+    sync,
+    isSyncing,
+    isOnCooldown,
+    canSync,
+    cooldownText,
+    lastSyncedText,
+    tooltipText,
+  } = useSyncGitHub({ username: currentUser?.username });
+
   const leaderboardDevs = leaderboardData?.pages[0]?.data || [];
 
   if (isLoading) {
@@ -67,6 +79,85 @@ export function DashboardContent() {
 
   return (
     <div className="space-y-8 pb-12">
+      {/* 0. Dashboard Header Bar with Sync Action */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2.5">
+            <h1 className="text-2xl sm:text-3xl font-black text-white tracking-tight">
+              Dashboard
+            </h1>
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-xs font-semibold text-emerald-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Live
+            </span>
+          </div>
+          <p className="text-xs sm:text-sm text-slate-400 mt-1">
+            Real-time developer analytics, rating milestones, and quests
+          </p>
+        </div>
+
+        {/* Sync Controls */}
+        <div className="flex flex-wrap items-center gap-3">
+          {/* Relative Last Synced Badge */}
+          <div
+            data-testid="last-synced-badge"
+            className="inline-flex items-center gap-2 px-3 py-2 rounded-xl bg-white/5 border border-white/10 text-xs font-medium text-slate-300 backdrop-blur-sm"
+          >
+            <span
+              className={cn(
+                "w-2 h-2 rounded-full transition-colors",
+                isSyncing
+                  ? "bg-amber-400 animate-ping"
+                  : isOnCooldown
+                  ? "bg-emerald-400 shadow-[0_0_8px_rgba(52,211,153,0.5)]"
+                  : "bg-slate-400"
+              )}
+            />
+            <span>{lastSyncedText}</span>
+          </div>
+
+          {/* Sync with GitHub Button with Tooltip */}
+          <Tooltip>
+            <TooltipTrigger render={<div className="inline-block" />}>
+              <button
+                type="button"
+                onClick={sync}
+                disabled={!canSync}
+                data-testid="sync-github-button"
+                className={cn(
+                  "relative inline-flex items-center gap-2 px-4 py-2 rounded-xl text-xs sm:text-sm font-semibold transition-all duration-200 select-none",
+                  canSync
+                    ? "bg-purple-600 hover:bg-purple-500 active:scale-95 text-white shadow-lg shadow-purple-500/20 hover:shadow-purple-500/40 cursor-pointer"
+                    : "bg-white/5 border border-white/10 text-slate-400 cursor-not-allowed opacity-80"
+                )}
+                aria-label={
+                  isOnCooldown
+                    ? `Sync available in ${cooldownText}`
+                    : "Sync with GitHub"
+                }
+              >
+                <RefreshCw
+                  className={cn(
+                    "w-4 h-4",
+                    isSyncing && "animate-spin text-purple-300"
+                  )}
+                />
+                <span>
+                  {isSyncing
+                    ? "Syncing..."
+                    : isOnCooldown
+                    ? `Sync available in ${cooldownText}`
+                    : "Sync with GitHub"}
+                </span>
+              </button>
+            </TooltipTrigger>
+            <TooltipContent side="bottom" sideOffset={8}>
+              {tooltipText}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      </div>
+
       {/* 1. Welcome Hero Banner */}
       <WelcomeHeroBanner user={currentUser} rating={rating} />
 
