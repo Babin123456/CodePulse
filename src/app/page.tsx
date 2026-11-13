@@ -10,14 +10,13 @@ import {
   Trophy,
   Star,
   Zap,
-  ChevronRight,
   Play,
   Target,
-  Sparkles,
 } from "lucide-react";
 import { GithubIcon } from "@/components/icons/github";
 import { Hero3D } from "@/components/sections/hero-3d";
 import { FAQSection } from "@/components/sections/faq-section";
+import { BackToTop } from "@/components/ui/back-to-top";
 
 const features = [
   {
@@ -394,6 +393,9 @@ export default function LandingPage() {
           </div>
         </div>
       </footer>
+
+      {/* Floating Back to Top Button */}
+      <BackToTop />
     </div>
   );
 }
