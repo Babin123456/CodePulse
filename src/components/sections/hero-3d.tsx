@@ -2,7 +2,6 @@
 
 import { motion } from "motion/react";
 import Link from "next/link";
-import Image from "next/image";
 import {
   ArrowRight,
   Play,
@@ -37,6 +36,7 @@ const CHART_DOTS: [number, number][] = [[60, 65], [120, 40], [180, 55], [240, 25
 export function Hero3D() {
   return (
     <section
+      aria-label="Hero Overview"
       className="relative min-h-screen flex items-center pt-16 overflow-hidden"
       style={{
         background: "transparent",
@@ -164,7 +164,7 @@ export function Hero3D() {
       `}</style>
 
       {/* Background glow effects */}
-      <div className="absolute inset-0 pointer-events-none">
+      <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
         <div
           className="absolute top-1/4 right-1/3 w-[500px] h-[500px] rounded-full blur-[180px] hero-glow"
           style={{ background: "rgba(56, 189, 248, 0.08)" }}
@@ -181,6 +181,7 @@ export function Hero3D() {
 
       {/* Grid overlay */}
       <div
+        aria-hidden="true"
         className="absolute inset-0 opacity-[0.04]"
         style={{
           backgroundImage: `linear-gradient(rgba(56,189,248,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(56,189,248,0.3) 1px, transparent 1px)`,
@@ -189,7 +190,7 @@ export function Hero3D() {
       />
 
       {/* Floating Particles */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      <div className="absolute inset-0 overflow-hidden pointer-events-none" aria-hidden="true">
         {[...Array(20)].map((_, i) => (
           <div
             key={i}
@@ -221,9 +222,9 @@ export function Hero3D() {
               color: "rgba(56, 189, 248, 0.9)",
             }}
           >
-            <Sparkles className="w-4 h-4" />
+            <Sparkles className="w-4 h-4" aria-hidden="true" />
             <span>Now tracking 250,000+ developers worldwide</span>
-            <ChevronRight className="w-4 h-4" />
+            <ChevronRight className="w-4 h-4" aria-hidden="true" />
           </motion.div>
 
           {/* Headline */}
@@ -257,7 +258,11 @@ export function Hero3D() {
             transition={{ delay: 0.4 }}
             className="flex flex-col sm:flex-row items-start gap-4"
           >
-            <Link href="/dashboard">
+            <Link
+              href="/dashboard"
+              aria-label="Start with GitHub - Track and gamify your coding journey"
+              className="rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#020617]"
+            >
               <motion.div
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
@@ -267,22 +272,26 @@ export function Hero3D() {
                   boxShadow: "0 8px 32px rgba(14, 165, 233, 0.3)",
                 }}
               >
-                <GithubIcon className="w-5 h-5" />
+                <GithubIcon className="w-5 h-5" aria-hidden="true" />
                 Start with GitHub
-                <ArrowRight className="w-5 h-5" />
+                <ArrowRight className="w-5 h-5" aria-hidden="true" />
               </motion.div>
             </Link>
-            <Link href="/dashboard">
+            <Link
+              href="/dashboard"
+              aria-label="View interactive demo of developer analytics"
+              className="rounded-2xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-400 focus-visible:ring-offset-2 focus-visible:ring-offset-[#020617]"
+            >
               <motion.div
                 whileHover={{ scale: 1.03 }}
                 whileTap={{ scale: 0.97 }}
-                className="flex items-center gap-2 px-8 py-4 rounded-2xl font-semibold text-lg transition-colors"
+                className="flex items-center gap-2 px-8 py-4 rounded-2xl font-semibold text-lg transition-colors text-slate-200 hover:text-white"
                 style={{
                   background: "rgba(56, 189, 248, 0.08)",
                   border: "1px solid rgba(56, 189, 248, 0.2)",
                 }}
               >
-                <Play className="w-5 h-5" />
+                <Play className="w-5 h-5" aria-hidden="true" />
                 View Demo
               </motion.div>
             </Link>
@@ -301,6 +310,8 @@ export function Hero3D() {
           }}
           className="order-1 lg:order-2 relative"
           style={{ perspective: "1200px" }}
+          aria-hidden="true"
+          role="presentation"
         >
           {/* ====== Main Dashboard Card (3D Tilted + Floating) ====== */}
           <div
@@ -320,7 +331,7 @@ export function Hero3D() {
               {/* Scanline effect */}
               <div className="absolute left-0 right-0 h-24 hero-scan-line pointer-events-none -z-10" style={{ background: "linear-gradient(to bottom, transparent, rgba(56, 189, 248, 0.05), transparent)" }} />
               {/* Window controls */}
-              <div className="flex items-center justify-between mb-5">
+              <div className="flex items-center justify-between mb-5" aria-hidden="true">
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full bg-red-500/80" />
                   <div className="w-3 h-3 rounded-full bg-yellow-500/80" />
@@ -330,7 +341,7 @@ export function Hero3D() {
                   className="text-xs font-medium"
                   style={{ color: "rgba(56, 189, 248, 0.6)" }}
                 >
-                  DevBattle Analytics
+                  CodePulse Analytics
                 </span>
               </div>
 

@@ -50,7 +50,7 @@ const faqs: FAQItem[] = [
 
 export function FAQSection() {
   return (
-    <section className="py-24 px-6 relative z-10" id="faq">
+    <section className="py-24 px-6 relative z-10" id="faq" aria-labelledby="faq-heading">
       <div className="max-w-4xl mx-auto">
         <div className="text-center mb-16">
           <motion.div
@@ -63,6 +63,7 @@ export function FAQSection() {
             Frequently Asked Questions
           </motion.div>
           <motion.h2
+            id="faq-heading"
             initial={{ opacity: 0, y: 15 }}
             whileInView={{ opacity: 1, y: 0 }}
             viewport={{ once: true }}
