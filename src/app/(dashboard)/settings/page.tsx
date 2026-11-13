@@ -24,12 +24,17 @@ import {
   Check,
   Sliders,
   Sparkles,
+  Download,
 } from "lucide-react";
 import { useTheme } from "next-themes";
 import { GithubIcon } from "@/components/icons/github";
 import { cn } from "@/lib/utils";
 import { Switch } from "@/components/ui/switch";
 import { useCurrentUser } from "@/hooks/api/use-auth";
+import {
+  buildUserDataExport,
+  downloadUserDataExport,
+} from "@/lib/data-export";
 import {
   useUpdateProfile,
   useUserPreferences,
@@ -65,6 +70,7 @@ const LANDING_TABS = [
 
 export default function SettingsPage() {
   const [activeSection, setActiveSection] = useState("profile");
+  const [isExporting, setIsExporting] = useState(false);
 
   const { theme, setTheme } = useTheme();
   const { data: user, isLoading: isUserLoading } = useCurrentUser();
@@ -122,6 +128,27 @@ export default function SettingsPage() {
     location: "",
     company: "",
     website: "",
+  };
+
+  const handleExportData = async () => {
+    try {
+      setIsExporting(true);
+      await new Promise((resolve) => setTimeout(resolve, 350));
+
+      const payload = buildUserDataExport({
+        user: displayUser,
+        rating: user?.rating,
+        stats: user?.stats,
+        repositories: user?.repositories,
+      });
+
+      const result = downloadUserDataExport(payload);
+      toast.success(`Account data exported successfully (${result.formattedSize}).`);
+    } catch {
+      toast.error("Failed to export account data. Please try again.");
+    } finally {
+      setIsExporting(false);
+    }
   };
 
   const notificationItems: {
@@ -678,6 +705,29 @@ export default function SettingsPage() {
                       <Switch defaultChecked={item.default} />
                     </div>
                   ))}
+
+                  {/* Account Data Export (GDPR) */}
+                  <div className="pt-4 mt-2 border-t border-white/[0.06] flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+                    <div>
+                      <div className="text-sm font-medium">Export Account Data</div>
+                      <div className="text-xs text-muted-foreground">
+                        Download your full platform data footprint including profile, stats, and achievements in JSON format.
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleExportData}
+                      disabled={isExporting}
+                      className="inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 hover:bg-white/10 text-sm font-medium transition-colors cursor-pointer disabled:opacity-50 shrink-0"
+                    >
+                      {isExporting ? (
+                        <Loader2 className="w-4 h-4 animate-spin text-muted-foreground" />
+                      ) : (
+                        <Download className="w-4 h-4 text-muted-foreground" />
+                      )}
+                      <span>{isExporting ? "Exporting..." : "Export All My Data"}</span>
+                    </button>
+                  </div>
                 </div>
               </div>
               <div className="glass-card rounded-[20px] p-6">
