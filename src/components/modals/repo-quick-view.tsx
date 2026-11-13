@@ -6,6 +6,7 @@ import { formatNumber } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import { motion } from "motion/react";
 import { RepoSparkline } from "@/components/charts/repo-sparkline";
+import { RepoCloneDropdown } from "@/components/repositories/repo-clone-dropdown";
 
 interface RepoQuickViewProps {
   repo: any | null;
@@ -110,7 +111,16 @@ export function RepoQuickView({ repo, isOpen, onClose }: RepoQuickViewProps) {
               <RepoSparkline id={repo.name} color={repo.languageColor || '#a855f7'} />
             </div>
             
-            <div className="flex flex-col sm:flex-row gap-3 w-full sm:w-auto">
+            <div className="flex flex-col sm:flex-row flex-wrap gap-3 w-full sm:w-auto items-stretch sm:items-center">
+              <RepoCloneDropdown
+                fullName={
+                  repo.fullName ||
+                  (repo.url ? repo.url.replace("https://github.com/", "") : "") ||
+                  repo.name
+                }
+                variant="secondary"
+                buttonClassName="w-full sm:w-auto justify-center py-3 rounded-xl"
+              />
               <button
                 onClick={() => { onClose(); router.push(`/repositories/${encodeURIComponent(repo.name)}`); }}
                 className="flex items-center gap-2 px-6 py-3 rounded-xl bg-gradient-to-r from-violet-600 to-blue-600 text-white font-bold hover:from-violet-500 hover:to-blue-500 transition-all w-full sm:w-auto justify-center shadow-lg shadow-violet-500/20"

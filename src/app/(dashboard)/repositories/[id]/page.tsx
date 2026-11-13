@@ -9,6 +9,7 @@ import { AnimatedCounter, AnimatedProgress, AnimatedRing } from "@/components/an
 import { formatNumber, cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/api/use-auth";
 import { RepoStarGrowthChart } from "@/components/charts/repo-star-growth-chart";
+import { RepoCloneDropdown } from "@/components/repositories/repo-clone-dropdown";
 import {
   ArrowLeft, Code, Star, GitFork, Eye, AlertCircle, GitPullRequest,
   Users, HardDrive, Calendar, Activity, ExternalLink, Shield, Zap,
@@ -336,15 +337,24 @@ export default function RepositoryDeepAnalysisPage() {
               </div>
             </div>
 
-            {/* CTA */}
-            <a
-              href={repo.url}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex items-center gap-2 px-8 py-3.5 rounded-2xl bg-white text-black font-bold hover:bg-slate-100 transition-all shadow-lg hover:shadow-xl shrink-0"
-            >
-              Open in GitHub <ExternalLink className="w-4 h-4" />
-            </a>
+            {/* Action Buttons: Code/Clone Dropdown & GitHub Link */}
+            <div className="flex flex-wrap items-center gap-3 shrink-0">
+              <RepoCloneDropdown
+                fullName={
+                  repo.fullName ||
+                  (repo.url ? repo.url.replace("https://github.com/", "") : "") ||
+                  repo.name
+                }
+              />
+              <a
+                href={repo.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 px-6 py-3.5 rounded-2xl bg-white text-black font-bold hover:bg-slate-100 transition-all shadow-lg hover:shadow-xl shrink-0"
+              >
+                Open in GitHub <ExternalLink className="w-4 h-4" />
+              </a>
+            </div>
           </div>
         </div>
       </motion.div>
