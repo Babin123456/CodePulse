@@ -8,12 +8,26 @@ import { StaggerContainer, StaggerItem } from "@/components/animations/page-tran
 import { AnimatedCounter, AnimatedProgress, AnimatedRing } from "@/components/animations/animated-counter";
 import { formatNumber, cn } from "@/lib/utils";
 import { useCurrentUser } from "@/hooks/api/use-auth";
+import type { Repository } from "@/types";
 import { RepoStarGrowthChart } from "@/components/charts/repo-star-growth-chart";
+import {
+  Tooltip,
+  TooltipTrigger,
+  TooltipContent,
+  TooltipProvider,
+} from "@/components/ui/tooltip";
 import {
   ArrowLeft, Code, Star, GitFork, Eye, AlertCircle, GitPullRequest,
   Users, HardDrive, Calendar, Activity, ExternalLink, Shield, Zap,
-  TrendingUp, Clock, Package, FileCode2, Loader2, ChevronDown
+  TrendingUp, Clock, Package, FileCode2, Loader2, Info
 } from "lucide-react";
+
+export type DetailedRepository = Omit<Repository, "description" | "language"> & {
+  description: string | null;
+  language: string | null;
+  repoCreatedAt?: string;
+  repoUpdatedAt?: string;
+};
 
 /* ──────────────────────────────────────────────
    Helper: Deterministic Pseudo-Random
@@ -51,7 +65,7 @@ function generateWeekdayData(name: string) {
 /* ──────────────────────────────────────────────
    Helper: Compute Derived Analytics
    ────────────────────────────────────────────── */
-function computeHealthScore(repo: any): number {
+function computeHealthScore(repo: DetailedRepository): number {
   let score = 0;
   if (repo.description && repo.description.length > 10) score += 20;
   if (repo.topics && repo.topics.length > 0) score += 15;
@@ -64,26 +78,30 @@ function computeHealthScore(repo: any): number {
   return Math.min(score, 100);
 }
 
-function computePopularityScore(repo: any): number {
+function computePopularityScore(repo: DetailedRepository): number {
   return Math.min(100, Math.round(
     (repo.stars * 3) + (repo.forks * 5) + (repo.watchers * 2)
   ));
 }
 
-function computeActivityScore(repo: any): number {
+function computeActivityScore(repo: DetailedRepository, now: number): number {
+  const updatedTime = new Date(repo.repoUpdatedAt || repo.updatedAt || now).getTime();
   const daysSinceUpdate = Math.max(1, Math.floor(
-    (Date.now() - new Date(repo.repoUpdatedAt || repo.updatedAt).getTime()) / (1000 * 60 * 60 * 24)
+    (now - updatedTime) / (1000 * 60 * 60 * 24)
   ));
   const recency = Math.max(0, 100 - daysSinceUpdate);
   const commitScore = Math.min(50, repo.commits);
   return Math.min(100, Math.round((recency + commitScore) / 1.5));
 }
 
-function getRankInfo(repo: any) {
-  if (repo.stars > 50) return { label: "Legendary", color: "#f59e0b", gradient: "from-amber-500 to-orange-500", icon: "🏆" };
-  if (repo.commits > 100 || repo.forks > 10) return { label: "On Fire", color: "#ef4444", gradient: "from-rose-500 to-pink-500", icon: "🔥" };
-  if (repo.commits > 50 && repo.stars < 10) return { label: "Hidden Gem", color: "#10b981", gradient: "from-emerald-400 to-teal-500", icon: "💎" };
-  if (repo.stars > 5) return { label: "Rising Star", color: "#3b82f6", gradient: "from-blue-500 to-cyan-500", icon: "⭐" };
+function getRankInfo(repo: DetailedRepository) {
+  const stars = repo.stars;
+  const commits = repo.commits;
+  const forks = repo.forks;
+  if (stars > 50) return { label: "Legendary", color: "#f59e0b", gradient: "from-amber-500 to-orange-500", icon: "🏆" };
+  if (commits > 100 || forks > 10) return { label: "On Fire", color: "#ef4444", gradient: "from-rose-500 to-pink-500", icon: "🔥" };
+  if (commits > 50 && stars < 10) return { label: "Hidden Gem", color: "#10b981", gradient: "from-emerald-400 to-teal-500", icon: "💎" };
+  if (stars > 5) return { label: "Rising Star", color: "#3b82f6", gradient: "from-blue-500 to-cyan-500", icon: "⭐" };
   return { label: "Starter", color: "#64748b", gradient: "from-slate-500 to-slate-600", icon: "🌱" };
 }
 
@@ -96,11 +114,12 @@ export default function RepositoryDeepAnalysisPage() {
   const repoName = decodeURIComponent(params.id as string);
   const { data: currentUser, isLoading } = useCurrentUser();
   const [activeTab, setActiveTab] = useState<"overview" | "activity" | "insights">("overview");
+  const [now] = useState(() => Date.now());
 
-  const repo = useMemo(() => {
+  const repo = useMemo<DetailedRepository | null>(() => {
     if (!currentUser) return null;
-    const repos = (currentUser as any)?.repositories || [];
-    return repos.find((r: any) => r.name === repoName) || null;
+    const repos = ((currentUser as unknown as { repositories?: DetailedRepository[] }).repositories) || [];
+    return repos.find((r) => r.name === repoName) || null;
   }, [currentUser, repoName]);
 
   if (isLoading) {
@@ -126,14 +145,14 @@ export default function RepositoryDeepAnalysisPage() {
 
   const healthScore = computeHealthScore(repo);
   const popularityScore = computePopularityScore(repo);
-  const activityScore = computeActivityScore(repo);
+  const activityScore = computeActivityScore(repo, now);
   const overallScore = Math.round((healthScore + popularityScore + activityScore) / 3);
   const rank = getRankInfo(repo);
   const activity = generateActivityData(repo.name, repo.commits);
   const weekdayData = generateWeekdayData(repo.name);
 
   const daysSinceCreated = Math.max(1, Math.floor(
-    (Date.now() - new Date(repo.repoCreatedAt || repo.createdAt).getTime()) / (1000 * 60 * 60 * 24)
+    (now - new Date(repo.repoCreatedAt || repo.createdAt || now).getTime()) / (1000 * 60 * 60 * 24)
   ));
   const commitsPerDay = (repo.commits / daysSinceCreated).toFixed(2);
   const ageInMonths = Math.floor(daysSinceCreated / 30);
@@ -422,13 +441,95 @@ export default function RepositoryDeepAnalysisPage() {
 
                       <div className="space-y-4 w-full max-w-[240px]">
                         {[
-                          { label: "Health", value: healthScore, color: "from-emerald-500 to-teal-500" },
-                          { label: "Popularity", value: popularityScore, color: "from-amber-500 to-orange-500" },
-                          { label: "Activity", value: activityScore, color: "from-blue-500 to-cyan-500" },
-                        ].map(s => (
+                          {
+                            label: "Health Score",
+                            value: healthScore,
+                            color: "from-emerald-500 to-teal-500",
+                            tooltip: (
+                              <div className="space-y-1.5 text-left">
+                                <div className="font-bold flex items-center gap-1.5 text-xs border-b border-background/20 pb-1">
+                                  Health Score Evaluation
+                                </div>
+                                <p className="text-[11px] leading-snug">
+                                  Evaluates repository maintenance and quality across 5 criteria:
+                                </p>
+                                <ul className="text-[11px] leading-tight space-y-0.5 list-disc pl-3.5 opacity-90">
+                                  <li>README existence &amp; project description</li>
+                                  <li>Repository topics &amp; discoverability tags</li>
+                                  <li>Primary programming language configuration</li>
+                                  <li>Commit frequency &amp; contribution velocity</li>
+                                  <li>Issue-to-PR closure ratio &amp; activity</li>
+                                </ul>
+                              </div>
+                            ),
+                          },
+                          {
+                            label: "Popularity Score",
+                            value: popularityScore,
+                            color: "from-amber-500 to-orange-500",
+                            tooltip: (
+                              <div className="space-y-1.5 text-left">
+                                <div className="font-bold flex items-center gap-1.5 text-xs border-b border-background/20 pb-1">
+                                  Popularity Score Formula
+                                </div>
+                                <p className="text-[11px] leading-snug">
+                                  Calculated using a weighted community engagement formula:
+                                </p>
+                                <div className="font-mono text-[10px] bg-background/10 px-1.5 py-1 rounded font-semibold">
+                                  Stars (3x) + Forks (5x) + Watchers (2x)
+                                </div>
+                                <p className="text-[10px] opacity-80">
+                                  Normalized on a 0–100 scale measuring ecosystem traction.
+                                </p>
+                              </div>
+                            ),
+                          },
+                          {
+                            label: "Activity Score",
+                            value: activityScore,
+                            color: "from-blue-500 to-cyan-500",
+                            tooltip: (
+                              <div className="space-y-1.5 text-left">
+                                <div className="font-bold flex items-center gap-1.5 text-xs border-b border-background/20 pb-1">
+                                  Activity Score Metrics
+                                </div>
+                                <p className="text-[11px] leading-snug">
+                                  Measures codebase momentum based on:
+                                </p>
+                                <ul className="text-[11px] leading-tight space-y-0.5 list-disc pl-3.5 opacity-90">
+                                  <li>Days since last repository update</li>
+                                  <li>Recent commit volume &amp; frequency</li>
+                                </ul>
+                              </div>
+                            ),
+                          },
+                        ].map((s) => (
                           <div key={s.label}>
-                            <div className="flex justify-between text-xs mb-1.5">
-                              <span className="text-slate-400 font-medium">{s.label}</span>
+                            <div className="flex justify-between items-center text-xs mb-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-slate-400 font-medium">{s.label}</span>
+                                <TooltipProvider delay={100}>
+                                  <Tooltip>
+                                    <TooltipTrigger
+                                      type="button"
+                                      className="inline-flex items-center justify-center rounded-full text-slate-500 hover:text-slate-200 transition-colors focus:outline-none focus-visible:ring-1 focus-visible:ring-primary cursor-help p-0.5"
+                                      aria-label={`${s.label} info`}
+                                      data-testid={`info-${s.label.toLowerCase().replace(/\s+/g, "-")}`}
+                                    >
+                                      <Info className="w-3.5 h-3.5" />
+                                    </TooltipTrigger>
+                                    <TooltipContent
+                                      side="top"
+                                      align="center"
+                                      sideOffset={6}
+                                      className="max-w-[280px] p-3 shadow-xl"
+                                      data-testid={`tooltip-${s.label.toLowerCase().replace(/\s+/g, "-")}`}
+                                    >
+                                      {s.tooltip}
+                                    </TooltipContent>
+                                  </Tooltip>
+                                </TooltipProvider>
+                              </div>
                               <span className="text-white font-bold">{s.value}%</span>
                             </div>
                             <AnimatedProgress value={s.value} max={100} size="sm" barClassName={`bg-gradient-to-r ${s.color}`} />
