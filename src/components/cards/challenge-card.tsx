@@ -162,6 +162,13 @@ export function ChallengeCard({
               )}
             </div>
 
+            {/* Custom badge */}
+            {challenge.isCustom && (
+              <span className="inline-flex items-center rounded-full px-2.5 py-1 text-xs font-semibold bg-primary/15 text-primary border border-primary/30">
+                Custom
+              </span>
+            )}
+
             {/* Difficulty badge */}
             <span
               className={cn(
