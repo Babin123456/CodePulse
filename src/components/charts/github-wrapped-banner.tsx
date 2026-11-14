@@ -2,8 +2,10 @@
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { Sparkles, Trophy, Flame, Code2 } from "lucide-react";
+import { Sparkles, Trophy, Flame, Code2, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { Button } from "@/components/ui/button";
+import { DeveloperReplayModal } from "@/components/modals/developer-replay-modal";
 
 interface GithubWrappedBannerProps {
   stats: any;
@@ -12,6 +14,7 @@ interface GithubWrappedBannerProps {
 
 export function GithubWrappedBanner({ stats, languages }: GithubWrappedBannerProps) {
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [isReplayOpen, setIsReplayOpen] = useState(false);
 
   // Generate dynamic insights
   const topLanguage = languages.length > 0 ? languages.reduce((prev, current) => (prev.count > current.count) ? prev : current) : null;
@@ -107,26 +110,45 @@ export function GithubWrappedBanner({ stats, languages }: GithubWrappedBannerPro
           </motion.div>
         </AnimatePresence>
 
-        {/* Progress Indicators */}
-        <div className="absolute bottom-6 left-8 sm:left-12 flex gap-2">
-          {insights.map((_, idx) => (
-            <div 
-              key={idx} 
-              className="h-1 rounded-full bg-white/10 overflow-hidden"
-              style={{ width: currentIndex === idx ? '32px' : '12px', transition: 'width 0.3s ease' }}
-            >
-              {currentIndex === idx && (
-                <motion.div
-                  className="h-full bg-white"
-                  initial={{ width: "0%" }}
-                  animate={{ width: "100%" }}
-                  transition={{ duration: 6, ease: "linear" }}
-                />
-              )}
-            </div>
-          ))}
+        {/* Progress Indicators and Replay Button */}
+        <div className="absolute bottom-6 left-8 sm:left-12 right-8 flex items-center justify-between">
+          <div className="flex gap-2">
+            {insights.map((_, idx) => (
+              <div 
+                key={idx} 
+                className="h-1 rounded-full bg-white/10 overflow-hidden"
+                style={{ width: currentIndex === idx ? '32px' : '12px', transition: 'width 0.3s ease' }}
+              >
+                {currentIndex === idx && (
+                  <motion.div
+                    className="h-full bg-white"
+                    initial={{ width: "0%" }}
+                    animate={{ width: "100%" }}
+                    transition={{ duration: 6, ease: "linear" }}
+                  />
+                )}
+              </div>
+            ))}
+          </div>
+
+          <Button
+            size="sm"
+            onClick={() => setIsReplayOpen(true)}
+            className="flex items-center gap-1.5 bg-white/15 hover:bg-white/25 text-white border border-white/20 text-xs font-semibold px-3 py-1.5 rounded-full backdrop-blur-md transition-all shadow-md"
+          >
+            <Play className="w-3.5 h-3.5 fill-white" />
+            <span>Play Replay Story</span>
+          </Button>
         </div>
       </div>
+
+      {/* Fullscreen Interactive Story Replay Modal */}
+      <DeveloperReplayModal
+        isOpen={isReplayOpen}
+        onClose={() => setIsReplayOpen(false)}
+        stats={stats}
+        languages={languages}
+      />
     </div>
   );
 }
