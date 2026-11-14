@@ -9,7 +9,10 @@ import { BattleRounds } from "@/components/battles/battle-rounds";
 import { BattleReport } from "@/components/battles/battle-report";
 import { BattleMatchmakingSkeleton } from "@/components/battles/battle-skeleton";
 import { BattleHistoryList, type HistoricalBattle } from "@/components/battles/battle-history-list";
+import { BattleQueueDialog } from "@/components/battles/battle-queue-dialog";
 import { useCurrentUser } from "@/hooks/api/use-auth";
+import { Swords } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 type BattlePhase = "SETUP" | "INTRO" | "ROUNDS" | "REPORT";
 
@@ -23,6 +26,7 @@ export default function BattlesPage() {
 
   const [isIntroFinished, setIsIntroFinished] = useState(false);
   const [battleHistory, setBattleHistory] = useState<HistoricalBattle[]>([]);
+  const [isQueueOpen, setIsQueueOpen] = useState(false);
 
   // Load history from localStorage
   useEffect(() => {
@@ -153,6 +157,16 @@ export default function BattlesPage() {
             exit={{ opacity: 0, scale: 0.95 }}
             className="space-y-6"
           >
+            <div className="flex justify-end">
+              <Button
+                onClick={() => setIsQueueOpen(true)}
+                className="flex items-center gap-2 bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold py-2.5 px-5 rounded-2xl shadow-lg"
+              >
+                <Swords className="w-4 h-4" />
+                <span>Quick Matchmaking Queue</span>
+              </Button>
+            </div>
+
             <BattleSetup
               onStart={startGhostBattle}
               initialPlayer1={initialP1}
@@ -241,6 +255,21 @@ export default function BattlesPage() {
         )}
 
       </AnimatePresence>
+
+      {/* Real-time Matchmaking Queue Dialog */}
+      <BattleQueueDialog
+        isOpen={isQueueOpen}
+        onClose={() => setIsQueueOpen(false)}
+        currentUser={currentUser}
+        onMatchFound={(opponent) => {
+          setIsQueueOpen(false);
+          startGhostBattle(
+            currentUser?.username || "currentdev",
+            opponent.username,
+            "overall"
+          );
+        }}
+      />
     </div>
   );
 }
