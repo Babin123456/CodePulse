@@ -12,6 +12,7 @@ import { MobileNav } from "@/components/layout/mobile-nav";
 import { DashboardBreadcrumbs } from "@/components/layout/breadcrumbs";
 import { CommandPalette } from "@/components/layout/command-palette";
 import { PageTransition } from "@/components/animations/page-transition";
+import { SessionTimeoutModal } from "@/components/feedback/session-timeout-modal";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   clearAuthToken,
@@ -118,6 +119,9 @@ export default function DashboardLayout({
         open={commandPaletteOpen}
         onOpenChange={setCommandPaletteOpen}
       />
+
+      {/* Session Inactivity Timeout Warning Modal */}
+      <SessionTimeoutModal />
     </div>
   );
 }
