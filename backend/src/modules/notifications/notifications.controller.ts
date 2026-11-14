@@ -1,5 +1,6 @@
-import { Controller, Get, Put, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Put, Param, Sse, MessageEvent } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Observable, interval, map } from 'rxjs';
 import { NotificationsService } from './notifications.service';
 
 @ApiTags('notifications')
@@ -13,6 +14,20 @@ export class NotificationsController {
   async getMyNotifications() {
     const mockUserId = '123';
     return this.notificationsService.getUserNotifications(mockUserId);
+  }
+
+  @Sse('stream')
+  @ApiOperation({ summary: 'Server-Sent Events stream for real-time notifications' })
+  streamNotifications(): Observable<MessageEvent> {
+    return interval(15000).pipe(
+      map((count) => ({
+        data: {
+          event: 'heartbeat',
+          timestamp: new Date().toISOString(),
+          unreadCount: 0,
+        },
+      } as MessageEvent))
+    );
   }
 
   @Put(':id/read')
