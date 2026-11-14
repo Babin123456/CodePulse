@@ -8,10 +8,11 @@ import { useCurrentUser } from "@/hooks/api/use-auth";
 import { 
   Swords, Search, Trophy, CalendarDays, MapPin, Calendar, GitBranch, Star, Users, Flame,
   TrendingUp, GitCommitHorizontal, GitPullRequest, CircleDot, CodeXml, Coffee, Plus, Minus,
-  Loader2, X, Tent, Crown, AlertCircle, Moon, Sun, Sunset, Code2, Key, RefreshCw, ArrowLeftRight
+  Loader2, X, Tent, Crown, AlertCircle, Moon, Sun, Sunset, Code2, Key, RefreshCw, ArrowLeftRight, Share2
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "@/components/ui/skeleton";
+import { CompareShareCard } from "@/components/compare/compare-share-card";
 
 // Types
 interface DevStats {
@@ -66,6 +67,7 @@ function CompareDashboard() {
   const [recentComparisons, setRecentComparisons] = useState<{u1: string, u2: string}[]>([]);
   const [githubToken, setGithubToken] = useState("");
   const [showTokenInput, setShowTokenInput] = useState(false);
+  const [isShareModalOpen, setIsShareModalOpen] = useState(false);
   
   // Load recent comparisons from local storage
   useEffect(() => {
@@ -612,16 +614,25 @@ function CompareDashboard() {
               </div>
               
               <div className="relative z-10 space-y-8">
-                {winner && (
-                  <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="p-4 rounded-xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 text-center">
-                    <div className="flex items-center justify-center gap-2">
-                      <Trophy className="w-4.5 h-4.5 text-emerald-500" />
-                      <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
-                        @{winner.username} wins the showdown!
-                      </span>
-                    </div>
-                  </motion.div>
-                )}
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  {winner ? (
+                    <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className="flex-1 p-4 rounded-xl border border-emerald-200 dark:border-emerald-500/20 bg-emerald-50 dark:bg-emerald-500/10 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <Trophy className="w-4.5 h-4.5 text-emerald-500" />
+                        <span className="text-sm font-semibold text-emerald-700 dark:text-emerald-400">
+                          @{winner.username} wins the showdown!
+                        </span>
+                      </div>
+                    </motion.div>
+                  ) : <div />}
+                  <button
+                    onClick={() => setIsShareModalOpen(true)}
+                    className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 text-white text-xs font-bold shadow-lg transition-all"
+                  >
+                    <Share2 className="w-4 h-4" />
+                    <span>Export Matchup Card</span>
+                  </button>
+                </div>
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-6 relative">
                   <ProfileCard dev={dev1} isWinner={winner?.id === dev1.id} />
@@ -836,6 +847,14 @@ function CompareDashboard() {
                 })()}
 
               </div>
+
+              {/* Matchup Share Card Modal */}
+              <CompareShareCard
+                isOpen={isShareModalOpen}
+                onClose={() => setIsShareModalOpen(false)}
+                dev1={dev1}
+                dev2={dev2}
+              />
             </motion.div>
           )
         )}
