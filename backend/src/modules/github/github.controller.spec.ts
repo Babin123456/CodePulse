@@ -171,4 +171,22 @@ describe('GithubController', () => {
       expect(result).toEqual({ synced: true, username: 'torvalds' });
     });
   });
+
+  describe('x-cache header', () => {
+    const header = async (payload: Record<string, unknown>) => {
+      githubServiceMock.getUserProfileCached.mockResolvedValueOnce(payload);
+      const res = { setHeader: jest.fn() };
+      await controller.getProfile('octocat', {} as any, undefined, res as any);
+      return res.setHeader;
+    };
+
+    it('sets STALE-FALLBACK for stale responses', async () => {
+      expect(await header({ cached: false, stale: true })).toHaveBeenCalledWith('x-cache', 'STALE-FALLBACK');
+    });
+
+    it('sets HIT for fresh cache hits and MISS for upstream fetches', async () => {
+      expect(await header({ cached: true })).toHaveBeenCalledWith('x-cache', 'HIT');
+      expect(await header({ cached: false })).toHaveBeenCalledWith('x-cache', 'MISS');
+    });
+  });
 });

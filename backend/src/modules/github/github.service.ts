@@ -13,7 +13,22 @@ import type { Cache } from 'cache-manager';
 import {
   GITHUB_CACHE_KEYS,
   GITHUB_CACHE_TTL,
+  GITHUB_STALE_TTL,
 } from './constants/cache.constants';
+import { GITHUB_FALLBACK } from './constants/fallback.constants';
+import {
+  CircuitBreakerService,
+  CircuitOpenError,
+  isUpstreamFailure,
+} from './circuit-breaker.service';
+import { GithubStaleStore } from './github-stale.store';
+
+export interface SwrResult<T> {
+  data: T;
+  cached: boolean;
+  stale: boolean;
+  fallbackSource?: 'mock';
+}
 
 const KNOWN_FRAMEWORKS = [
   'react',
@@ -50,7 +65,12 @@ export class GithubService {
   constructor(
     private readonly configService: ConfigService,
     @Inject(CACHE_MANAGER) private readonly cacheManager: Cache,
+    private readonly breaker: CircuitBreakerService,
+    private readonly staleStore: GithubStaleStore,
   ) {}
+
+  /** In-flight upstream refreshes by cache key, so one key is fetched once. */
+  private readonly inflight = new Map<string, Promise<unknown>>();
 
   /**
    * Helper to build common headers for GitHub API requests.
@@ -77,18 +97,26 @@ export class GithubService {
 
     this.logger.error(`[${context}] Error fetching GitHub data for ${username || 'unknown'}: ${message}`);
 
+    // Tell the circuit breaker whether GitHub itself looks unhealthy
+    const breakerFailure = isUpstreamFailure(error);
+    const tag = (ex: HttpException) => Object.assign(ex, { breakerFailure });
+
     if (status === 404) {
-      throw new NotFoundException(`GitHub user "${username}" was not found`);
+      throw tag(new NotFoundException(`GitHub user "${username}" was not found`));
     }
     if (status === 403 || status === 429) {
-      throw new HttpException(
-        'GitHub API rate limit exceeded. Please try again later or provide a personal access token.',
-        HttpStatus.TOO_MANY_REQUESTS,
+      throw tag(
+        new HttpException(
+          'GitHub API rate limit exceeded. Please try again later or provide a personal access token.',
+          HttpStatus.TOO_MANY_REQUESTS,
+        ),
       );
     }
-    throw new HttpException(
-      `Failed to proxy GitHub data: ${message}`,
-      status || HttpStatus.INTERNAL_SERVER_ERROR,
+    throw tag(
+      new HttpException(
+        `Failed to proxy GitHub data: ${message}`,
+        status || HttpStatus.INTERNAL_SERVER_ERROR,
+      ),
     );
   }
 
@@ -97,6 +125,12 @@ export class GithubService {
    * Preserved for backward-compatibility with SyncService.
    */
   async fetchUserData(username: string, accessToken?: string) {
+    try {
+      this.breaker.acquire();
+    } catch {
+      this.logger.warn(`GitHub circuit breaker is open, skipping GraphQL fetch for ${username}`);
+      return null;
+    }
     try {
       const query = `
         query($username: String!) {
@@ -214,11 +248,15 @@ export class GithubService {
 
       if (response.data.errors) {
         this.logger.error('GraphQL errors:', response.data.errors);
-        throw new Error('Failed to fetch GitHub data');
+        // GraphQL-level errors mean GitHub answered, so they do not trip the breaker
+        throw Object.assign(new Error('Failed to fetch GitHub data'), { breakerFailure: false });
       }
 
+      this.breaker.recordSuccess();
       return response.data.data.user;
     } catch (error: any) {
+      if (isUpstreamFailure(error)) this.breaker.recordFailure();
+      else this.breaker.recordSuccess();
       this.logger.error(`Error fetching GitHub data for ${username}:`, error.message);
       return null;
     }
@@ -580,6 +618,102 @@ export class GithubService {
   // =========================================================================
 
   /**
+   * Stale-while-revalidate lookup shared by every cached proxy method.
+   *
+   * 1. fresh key hit            -> serve it
+   * 2. fresh miss, stale copy   -> serve the stale copy now, refresh in the background
+   * 3. nothing cached           -> fetch (through the circuit breaker) and store both copies
+   * 4. GitHub failing / breaker open -> serve the stale copy, else mock fallback data
+   *
+   * Errors that are not upstream outages (404 for an unknown user) are rethrown.
+   */
+  private async getWithSwr<T>(opts: {
+    key: string;
+    ttl: number;
+    forceRefresh: boolean;
+    label: string;
+    fetcher: () => Promise<T>;
+    fallback: () => T;
+  }): Promise<SwrResult<T>> {
+    const { key, ttl, forceRefresh, label, fetcher, fallback } = opts;
+    const staleKey = GITHUB_CACHE_KEYS.STALE(key);
+
+    if (forceRefresh) {
+      this.logger.log(`Force refresh: evicting cache key "${key}"`);
+      await this.cacheManager.del(key);
+    } else {
+      const cached = await this.cacheManager.get(key);
+      if (cached) {
+        this.logger.log(`Cache HIT for ${label}`);
+        return { data: cached as T, cached: true, stale: false };
+      }
+    }
+
+    const staleCopy = await this.staleStore.get<T>(staleKey);
+
+    if (!forceRefresh && staleCopy !== undefined) {
+      this.logger.log(`Serving stale ${label} while revalidating`);
+      if (this.breaker.canAttempt()) {
+        this.refresh(key, staleKey, ttl, fetcher).catch((error: any) =>
+          this.logger.warn(`Background revalidation failed for ${label}: ${error?.message}`),
+        );
+      }
+      return { data: staleCopy, cached: false, stale: true };
+    }
+
+    this.logger.log(`Cache MISS for ${label}. Fetching from GitHub...`);
+    try {
+      const data = await this.refresh(key, staleKey, ttl, fetcher);
+      return { data, cached: false, stale: false };
+    } catch (error: any) {
+      if (!(error instanceof CircuitOpenError) && !isUpstreamFailure(error)) {
+        throw error;
+      }
+      if (staleCopy !== undefined) {
+        this.logger.warn(`GitHub unavailable for ${label}, serving stale copy`);
+        return { data: staleCopy, cached: false, stale: true };
+      }
+      // Nothing to serve and GitHub said "rate limited": keep the existing 429
+      // contract so clients can back off, instead of returning placeholder data.
+      if (typeof error?.getStatus === 'function' && error.getStatus() === HttpStatus.TOO_MANY_REQUESTS) {
+        throw error;
+      }
+      this.logger.warn(`GitHub unavailable for ${label} and no stale copy, serving fallback data`);
+      return { data: fallback(), cached: false, stale: true, fallbackSource: 'mock' };
+    }
+  }
+
+  /** Single-flight upstream fetch that refreshes both the fresh and stale copies. */
+  private refresh<T>(
+    key: string,
+    staleKey: string,
+    ttl: number,
+    fetcher: () => Promise<T>,
+  ): Promise<T> {
+    const existing = this.inflight.get(key);
+    if (existing) return existing as Promise<T>;
+
+    const run = (async () => {
+      const data = await this.breaker.execute(fetcher);
+      await this.cacheManager.set(key, data, ttl);
+      await this.staleStore.set(staleKey, data, GITHUB_STALE_TTL);
+      return data;
+    })().finally(() => {
+      this.inflight.delete(key);
+    });
+    this.inflight.set(key, run);
+    return run;
+  }
+
+  private withFlags(result: SwrResult<unknown>) {
+    return {
+      cached: result.cached,
+      ...(result.stale ? { stale: true } : {}),
+      ...(result.fallbackSource ? { fallbackSource: result.fallbackSource } : {}),
+    };
+  }
+
+  /**
    * Retrieves developer analytics with smart caching (TTL: 5 minutes).
    * If forceRefresh is true, invalidates existing cache and queries GitHub fresh.
    */
@@ -588,24 +722,15 @@ export class GithubService {
     token?: string,
     forceRefresh: boolean = false,
   ) {
-    const cacheKey = GITHUB_CACHE_KEYS.DEVELOPER(username);
-
-    if (forceRefresh) {
-      this.logger.log(`Force refresh: evicting cache key "${cacheKey}"`);
-      await this.cacheManager.del(cacheKey);
-    } else {
-      const cached = await this.cacheManager.get(cacheKey);
-      if (cached) {
-        this.logger.log(`Cache HIT for developer analytics: ${username}`);
-        return { ...(cached as Record<string, any>), cached: true };
-      }
-    }
-
-    this.logger.log(`Cache MISS for developer analytics: ${username}. Fetching from GitHub...`);
-    const data = await this.fetchDeveloperAnalytics(username, token);
-    await this.cacheManager.set(cacheKey, data, GITHUB_CACHE_TTL.DEVELOPER);
-
-    return { ...data, cached: false };
+    const result = await this.getWithSwr<Record<string, any>>({
+      key: GITHUB_CACHE_KEYS.DEVELOPER(username),
+      ttl: GITHUB_CACHE_TTL.DEVELOPER,
+      forceRefresh,
+      label: `developer analytics: ${username}`,
+      fetcher: () => this.fetchDeveloperAnalytics(username, token),
+      fallback: () => GITHUB_FALLBACK.DEVELOPER(username),
+    });
+    return { ...result.data, ...this.withFlags(result) };
   }
 
   /**
@@ -616,24 +741,15 @@ export class GithubService {
     token?: string,
     forceRefresh: boolean = false,
   ) {
-    const cacheKey = GITHUB_CACHE_KEYS.PROFILE(username);
-
-    if (forceRefresh) {
-      this.logger.log(`Force refresh: evicting cache key "${cacheKey}"`);
-      await this.cacheManager.del(cacheKey);
-    } else {
-      const cached = await this.cacheManager.get(cacheKey);
-      if (cached) {
-        this.logger.log(`Cache HIT for user profile: ${username}`);
-        return { ...(cached as Record<string, any>), cached: true };
-      }
-    }
-
-    this.logger.log(`Cache MISS for user profile: ${username}. Fetching from GitHub...`);
-    const data = await this.fetchUserProfile(username, token);
-    await this.cacheManager.set(cacheKey, data, GITHUB_CACHE_TTL.PROFILE);
-
-    return { ...data, cached: false };
+    const result = await this.getWithSwr<Record<string, any>>({
+      key: GITHUB_CACHE_KEYS.PROFILE(username),
+      ttl: GITHUB_CACHE_TTL.PROFILE,
+      forceRefresh,
+      label: `user profile: ${username}`,
+      fetcher: () => this.fetchUserProfile(username, token),
+      fallback: () => GITHUB_FALLBACK.PROFILE(username),
+    });
+    return { ...result.data, ...this.withFlags(result) };
   }
 
   /**
@@ -645,24 +761,15 @@ export class GithubService {
     forceRefresh: boolean = false,
     limit: number = 30,
   ) {
-    const cacheKey = `${GITHUB_CACHE_KEYS.REPOS(username)}:${limit}`;
-
-    if (forceRefresh) {
-      this.logger.log(`Force refresh: evicting cache key "${cacheKey}"`);
-      await this.cacheManager.del(cacheKey);
-    } else {
-      const cached = await this.cacheManager.get(cacheKey);
-      if (cached) {
-        this.logger.log(`Cache HIT for user repos: ${username}`);
-        return { repos: cached, cached: true };
-      }
-    }
-
-    this.logger.log(`Cache MISS for user repos: ${username}. Fetching from GitHub...`);
-    const data = await this.fetchUserRepos(username, token, limit);
-    await this.cacheManager.set(cacheKey, data, GITHUB_CACHE_TTL.REPOS);
-
-    return { repos: data, cached: false };
+    const result = await this.getWithSwr<unknown[]>({
+      key: `${GITHUB_CACHE_KEYS.REPOS(username)}:${limit}`,
+      ttl: GITHUB_CACHE_TTL.REPOS,
+      forceRefresh,
+      label: `user repos: ${username}`,
+      fetcher: () => this.fetchUserRepos(username, token, limit),
+      fallback: () => GITHUB_FALLBACK.REPOS(),
+    });
+    return { repos: result.data, ...this.withFlags(result) };
   }
 
   /**
@@ -674,24 +781,23 @@ export class GithubService {
     forceRefresh: boolean = false,
     limit: number = 30,
   ) {
-    const cacheKey = `${GITHUB_CACHE_KEYS.EVENTS(username)}:${limit}`;
-
-    if (forceRefresh) {
-      this.logger.log(`Force refresh: evicting cache key "${cacheKey}"`);
-      await this.cacheManager.del(cacheKey);
-    } else {
-      const cached = await this.cacheManager.get(cacheKey);
-      if (cached) {
-        this.logger.log(`Cache HIT for user events: ${username}`);
-        return { events: cached, cached: true };
-      }
-    }
-
-    this.logger.log(`Cache MISS for user events: ${username}. Fetching from GitHub...`);
-    const data = await this.fetchUserEvents(username, token, limit);
-    await this.cacheManager.set(cacheKey, data, GITHUB_CACHE_TTL.EVENTS);
-
-    return { events: data, cached: false };
+    const result = await this.getWithSwr<unknown[]>({
+      key: `${GITHUB_CACHE_KEYS.EVENTS(username)}:${limit}`,
+      ttl: GITHUB_CACHE_TTL.EVENTS,
+      forceRefresh,
+      label: `user events: ${username}`,
+      // strict so failures reach the breaker; other errors keep the old "[]" behaviour
+      fetcher: async () => {
+        try {
+          return await this.fetchUserEvents(username, token, limit, true);
+        } catch (error: any) {
+          if (isUpstreamFailure(error)) throw error;
+          return [];
+        }
+      },
+      fallback: () => GITHUB_FALLBACK.EVENTS(),
+    });
+    return { events: result.data, ...this.withFlags(result) };
   }
 
   /**
@@ -709,6 +815,10 @@ export class GithubService {
       this.cacheManager.del(profileKey),
       this.cacheManager.del(reposKey),
       this.cacheManager.del(eventsKey),
+      this.staleStore.del(GITHUB_CACHE_KEYS.STALE(developerKey)),
+      this.staleStore.del(GITHUB_CACHE_KEYS.STALE(profileKey)),
+      this.staleStore.del(GITHUB_CACHE_KEYS.STALE(reposKey)),
+      this.staleStore.del(GITHUB_CACHE_KEYS.STALE(eventsKey)),
     ]);
 
     this.logger.log(`Successfully invalidated all caches for user: ${username}`);

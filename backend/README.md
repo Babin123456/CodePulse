@@ -58,6 +58,14 @@ To minimize latency and safeguard external GitHub API quotas, non-volatile publi
 3. **Automatic TTL Expiration**:
    Cache keys automatically expire after their specified TTL, ensuring data remains fresh without manual intervention.
 
+### Stale-while-revalidate and circuit breaker
+Every successful GitHub response is also written under `github:stale:{cache key}` with a **1 hour** TTL, in Redis through `ioredis` (falling back to a per-process map if Redis is unreachable). Note that `CacheModule.register` in `app.module.ts` does not configure a Redis store, so the fresh keys above live in the in-process memory cache; only the stale copies are in Redis.
+
+- Fresh key expired but a stale copy exists: the stale copy is returned immediately and refreshed once in the background.
+- GitHub failing or the circuit breaker open: the stale copy is returned; with no stale copy, placeholder data from `constants/fallback.constants.ts` is returned (`fallbackSource: 'mock'`). A GitHub rate-limit response with nothing cached is still returned as `429`.
+- The breaker opens after 3 consecutive failures (timeouts, 5xx, 429, rate-limit 403), stays open for 30 seconds, then lets one trial request through (HALF_OPEN). A 404 for an unknown user never counts as a failure.
+- Responses served from the stale layer carry `stale: true` in the body and the header `x-cache: STALE-FALLBACK` (`HIT` for fresh cache hits, `MISS` for live fetches).
+
 ---
 
 ## 📦 Project Setup
