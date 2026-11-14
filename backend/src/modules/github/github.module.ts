@@ -3,13 +3,14 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { GithubController } from './github.controller';
 import { GithubService } from './github.service';
+import { GithubWebhookController } from './github-webhook.controller';
 import { CircuitBreakerService } from './circuit-breaker.service';
 import { GITHUB_STALE_REDIS, GithubStaleStore } from './github-stale.store';
 import { CustomThrottlerGuard } from '../../common/guards/custom-throttler.guard';
 
 @Module({
   imports: [ConfigModule],
-  controllers: [GithubController],
+  controllers: [GithubController, GithubWebhookController],
   providers: [
     GithubService,
     CircuitBreakerService,
