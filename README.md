@@ -1067,6 +1067,19 @@ git clone https://github.com/code-with-abhi-i5/CodePulse.git
 cd CodePulse
 ```
 
+### Quick Start with Docker (one command)
+Requires Docker with Compose v2. From the repository root:
+```bash
+docker compose -f docker-compose.dev.yml up --build
+# or: sh scripts/dev-setup.sh   (Windows: scripts\dev-setup.bat)
+```
+This starts PostgreSQL 16, Redis 7, Mailpit, the NestJS API and the Next.js app. The backend waits for a healthy database, then runs `prisma migrate deploy` and `prisma db seed` before starting, so the database is ready with no manual steps. Both are idempotent: restarting or re-running `up` will not duplicate data.
+
+- Frontend: http://localhost:3000, API: http://localhost:3001/api/v1, Swagger: http://localhost:3001/api/docs, Mailpit: http://localhost:8025
+- Source is bind-mounted, so edits hot-reload. Optional secrets (`GITHUB_TOKEN`, `GITHUB_CLIENT_ID`, `GITHUB_CLIENT_SECRET`, `JWT_SECRET`) are read from a root `.env`.
+- Stop with `docker compose -f docker-compose.dev.yml down`; add `-v` to also wipe the database.
+- Do not run it together with `backend/docker-compose.yml` (same host ports). The manual steps below are still supported.
+
 ### Step 2: Install Frontend Dependencies
 ```bash
 npm install
