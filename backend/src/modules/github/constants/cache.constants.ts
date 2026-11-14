@@ -7,6 +7,8 @@ export const GITHUB_CACHE_KEYS = {
   PROFILE: (username: string) => `github:profile:${username.toLowerCase()}`,
   REPOS: (username: string) => `github:repos:${username.toLowerCase()}`,
   EVENTS: (username: string) => `github:events:${username.toLowerCase()}`,
+  // Long-lived copy served when the fresh key expired or GitHub is failing
+  STALE: (freshKey: string) => `github:stale:${freshKey}`,
 };
 
 export const GITHUB_CACHE_TTL = {
@@ -15,6 +17,13 @@ export const GITHUB_CACHE_TTL = {
   PROFILE: 10 * 60 * 1000,  // 10 minutes
   REPOS: 5 * 60 * 1000,     // 5 minutes
   EVENTS: 3 * 60 * 1000,    // 3 minutes
+};
+
+export const GITHUB_STALE_TTL = 60 * 60 * 1000; // 1 hour
+
+export const GITHUB_BREAKER_CONFIG = {
+  FAILURE_THRESHOLD: 3, // consecutive upstream failures before the breaker opens
+  COOLDOWN_MS: 30 * 1000, // time spent OPEN before one trial request is allowed
 };
 
 export const GITHUB_RATE_LIMITS = {

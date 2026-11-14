@@ -4,6 +4,8 @@ import { CACHE_MANAGER } from '@nestjs/cache-manager';
 import { HttpException, NotFoundException, HttpStatus } from '@nestjs/common';
 import axios from 'axios';
 import { GithubService } from './github.service';
+import { CircuitBreakerService } from './circuit-breaker.service';
+import { GithubStaleStore } from './github-stale.store';
 import {
   GITHUB_CACHE_KEYS,
   GITHUB_CACHE_TTL,
@@ -30,6 +32,8 @@ describe('GithubService', () => {
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         GithubService,
+        CircuitBreakerService,
+        GithubStaleStore,
         {
           provide: ConfigService,
           useValue: {

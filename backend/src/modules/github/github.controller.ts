@@ -11,7 +11,9 @@ import {
   HttpStatus,
   BadRequestException,
   UseGuards,
+  Res,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import {
   ApiTags,
   ApiOperation,
@@ -52,13 +54,14 @@ export class GithubController {
   async getDeveloperByQuery(
     @Query() query: GitHubDeveloperQueryDto,
     @Headers('authorization') authHeader?: string,
+    @Res({ passthrough: true }) res?: Response,
   ) {
     if (!query.username) {
       throw new BadRequestException('Query parameter "username" is required');
     }
     const token = this.extractToken(authHeader);
     const force = Boolean(query.force || query.refresh);
-    return this.githubService.getDeveloperAnalyticsCached(query.username, token, force);
+    return this.withCacheHeader(res, await this.githubService.getDeveloperAnalyticsCached(query.username, token, force));
   }
 
   @Get('developer/:username')
@@ -77,10 +80,11 @@ export class GithubController {
     @Param('username') username: string,
     @Query() query: GitHubQueryDto,
     @Headers('authorization') authHeader?: string,
+    @Res({ passthrough: true }) res?: Response,
   ) {
     const token = this.extractToken(authHeader);
     const force = Boolean(query.force || query.refresh);
-    return this.githubService.getDeveloperAnalyticsCached(username, token, force);
+    return this.withCacheHeader(res, await this.githubService.getDeveloperAnalyticsCached(username, token, force));
   }
 
   @Get('profile/:username')
@@ -99,10 +103,11 @@ export class GithubController {
     @Param('username') username: string,
     @Query() query: GitHubQueryDto,
     @Headers('authorization') authHeader?: string,
+    @Res({ passthrough: true }) res?: Response,
   ) {
     const token = this.extractToken(authHeader);
     const force = Boolean(query.force || query.refresh);
-    return this.githubService.getUserProfileCached(username, token, force);
+    return this.withCacheHeader(res, await this.githubService.getUserProfileCached(username, token, force));
   }
 
   @Get('repos/:username')
@@ -123,11 +128,12 @@ export class GithubController {
     @Query() query: GitHubQueryDto,
     @Query('limit') limitStr?: string,
     @Headers('authorization') authHeader?: string,
+    @Res({ passthrough: true }) res?: Response,
   ) {
     const token = this.extractToken(authHeader);
     const force = Boolean(query.force || query.refresh);
     const limit = limitStr ? parseInt(limitStr, 10) : 30;
-    return this.githubService.getUserReposCached(username, token, force, limit);
+    return this.withCacheHeader(res, await this.githubService.getUserReposCached(username, token, force, limit));
   }
 
   @Get('events/:username')
@@ -147,11 +153,12 @@ export class GithubController {
     @Query() query: GitHubQueryDto,
     @Query('limit') limitStr?: string,
     @Headers('authorization') authHeader?: string,
+    @Res({ passthrough: true }) res?: Response,
   ) {
     const token = this.extractToken(authHeader);
     const force = Boolean(query.force || query.refresh);
     const limit = limitStr ? parseInt(limitStr, 10) : 30;
-    return this.githubService.getUserEventsCached(username, token, force, limit);
+    return this.withCacheHeader(res, await this.githubService.getUserEventsCached(username, token, force, limit));
   }
 
   @Delete('cache/:username')
@@ -182,6 +189,18 @@ export class GithubController {
   ) {
     const token = this.extractToken(authHeader);
     return this.githubService.syncUser(syncDto.username, token);
+  }
+
+  /** x-cache: HIT (fresh cache), STALE-FALLBACK (stale copy or fallback data), MISS (fetched from GitHub). */
+  private withCacheHeader<T extends { cached?: boolean; stale?: boolean }>(
+    res: Response | undefined,
+    result: T,
+  ): T {
+    res?.setHeader(
+      'x-cache',
+      result.stale ? 'STALE-FALLBACK' : result.cached ? 'HIT' : 'MISS',
+    );
+    return result;
   }
 
   private extractToken(authHeader?: string): string | undefined {
