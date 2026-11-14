@@ -37,6 +37,7 @@ export default function RepositoriesPage() {
   const [minStars, setMinStars] = useState<number>(0);
   const [viewMode, setViewMode] = useState<"grid" | "list">("grid");
   const [pinnedRepoIds, setPinnedRepoIds] = useState<string[]>([]);
+  const [pinnedOnly, setPinnedOnly] = useState(false);
   const [selectedRepo, setSelectedRepo] = useState<any | null>(null);
   const router = useRouter();
 
@@ -85,14 +86,16 @@ export default function RepositoriesPage() {
     if (selectedLanguage !== "All") count++;
     if (repoType !== "all") count++;
     if (minStars > 0) count++;
+    if (pinnedOnly) count++;
     return count;
-  }, [searchQuery, selectedLanguage, repoType, minStars]);
+  }, [searchQuery, selectedLanguage, repoType, minStars, pinnedOnly]);
 
   const handleClearAllFilters = () => {
     setSearchQuery("");
     setSelectedLanguage("All");
     setRepoType("all");
     setMinStars(0);
+    setPinnedOnly(false);
   };
 
   const filteredAndSortedRepos = useMemo(() => {
@@ -124,8 +127,19 @@ export default function RepositoriesPage() {
       result = result.filter((r: any) => (Number(r.stars) || 0) >= minStars);
     }
 
-    // 5. Sorting
+    // 5. Pinned Only filter
+    if (pinnedOnly) {
+      result = result.filter((r: any) => pinnedRepoIds.includes(r.id));
+    }
+
+    // 6. Sorting
     result.sort((a: any, b: any) => {
+      // Keep pinned items at top
+      const isPinnedA = pinnedRepoIds.includes(a.id);
+      const isPinnedB = pinnedRepoIds.includes(b.id);
+      if (isPinnedA && !isPinnedB) return -1;
+      if (!isPinnedA && isPinnedB) return 1;
+
       switch (sortBy) {
         case "stars":
           return (b.stars || 0) - (a.stars || 0);
@@ -141,7 +155,7 @@ export default function RepositoriesPage() {
     });
 
     return result;
-  }, [repos, searchQuery, selectedLanguage, repoType, minStars, sortBy]);
+  }, [repos, searchQuery, selectedLanguage, repoType, minStars, pinnedOnly, pinnedRepoIds, sortBy]);
 
   const { pinnedRepos, unpinnedRepos } = useMemo(() => {
     return {
@@ -429,6 +443,20 @@ export default function RepositoriesPage() {
 
             {/* View Toggles */}
             <div className="flex items-center gap-1 bg-black/20 p-1 rounded-xl border border-white/5 shrink-0">
+              <button
+                onClick={() => setPinnedOnly(!pinnedOnly)}
+                aria-label="Toggle pinned only"
+                title={pinnedOnly ? "Show All Repos" : "Show Pinned Only"}
+                className={cn(
+                  "flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-all cursor-pointer",
+                  pinnedOnly
+                    ? "bg-primary text-white shadow-sm"
+                    : "text-muted-foreground hover:text-white hover:bg-white/5"
+                )}
+              >
+                <Pin className="w-3.5 h-3.5" />
+                <span className="hidden sm:inline">Pinned ({pinnedRepoIds.length})</span>
+              </button>
               <button
                 onClick={() => setViewMode("grid")}
                 aria-label="Grid view"
