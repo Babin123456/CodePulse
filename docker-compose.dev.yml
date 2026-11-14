@@ -1,0 +1,114 @@
+# Full local stack: PostgreSQL, Redis, Mailpit, NestJS API and Next.js app.
+#
+#   docker compose -f docker-compose.dev.yml up --build
+#
+# The backend waits for a healthy database, applies Prisma migrations and
+# seeds data before it starts. Re-running is safe (migrate deploy + upserts).
+# Optional secrets (GITHUB_TOKEN, GITHUB_CLIENT_ID, ...) are read from a root
+# .env file; see .env.example. Do not run this together with
+# backend/docker-compose.yml, they use the same host ports.
+name: codepulse-dev
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: devbattle
+      POSTGRES_PASSWORD: devbattle_password
+      POSTGRES_DB: devbattle_db
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U devbattle -d devbattle_db']
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '6379:6379'
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    restart: unless-stopped
+
+  mailpit:
+    image: axllent/mailpit:latest
+    ports:
+      - '1025:1025'
+      - '8025:8025'
+    restart: unless-stopped
+
+  backend:
+    build:
+      context: ./backend
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgresql://devbattle:devbattle_password@postgres:5432/devbattle_db?schema=public
+      DIRECT_URL: postgresql://devbattle:devbattle_password@postgres:5432/devbattle_db?schema=public
+      REDIS_HOST: redis
+      REDIS_PORT: '6379'
+      SMTP_HOST: mailpit
+      SMTP_PORT: '1025'
+      SMTP_SECURE: 'false'
+      MAIL_FROM: DevBattle <noreply@example.com>
+      PORT: '3001'
+      APP_URL: http://localhost:3000
+      JWT_SECRET: ${JWT_SECRET:-dev-only-secret-change-me}
+      JWT_EXPIRATION: 7d
+      GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_CLIENT_SECRET: ${GITHUB_CLIENT_SECRET:-}
+      CHOKIDAR_USEPOLLING: 'true'
+    ports:
+      - '3001:3001'
+    volumes:
+      - ./backend:/app
+      - backend_node_modules:/app/node_modules
+    healthcheck:
+      # Any HTTP response means Nest is up, even a 404 on the root path.
+      test: ['CMD', 'node', '-e', "fetch('http://localhost:3001/api/v1').then(()=>process.exit(0)).catch(()=>process.exit(1))"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 90s
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    depends_on:
+      backend:
+        condition: service_healthy
+    environment:
+      NEXT_PUBLIC_API_URL: http://localhost:3001/api/v1
+      INTERNAL_API_URL: http://backend:3001/api/v1
+      NEXT_PUBLIC_GITHUB_CLIENT_ID: ${GITHUB_CLIENT_ID:-}
+      GITHUB_TOKEN: ${GITHUB_TOKEN:-}
+      WATCHPACK_POLLING: 'true'
+    ports:
+      - '3000:3000'
+    volumes:
+      - .:/app
+      - frontend_node_modules:/app/node_modules
+      - frontend_next:/app/.next
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  backend_node_modules:
+  frontend_node_modules:
+  frontend_next:
