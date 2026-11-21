@@ -973,3 +973,16 @@ model UserSettings {
 
   @@map("user_settings")
 }
+
+model ZkpSubmissionProof {
+  id            String   @id @default(uuid())
+  userId        String
+  challengeId   String
+  proofHash     String   @unique
+  publicSignals Json
+  verifiedAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([challengeId])
+  @@map("zkp_submission_proofs")
+}
