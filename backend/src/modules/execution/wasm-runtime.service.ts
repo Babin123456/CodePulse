@@ -43,7 +43,8 @@ export class WasmRuntimeService {
   async execute(dto: WasmExecuteDto): Promise<WasmExecutionResult> {
     const startupStart = performance.now();
     const fuelLimit = dto.fuelLimit || 100_000_000;
-    const memoryLimitPages = Math.min(256, Math.max(1, dto.memoryLimitPages || 16));
+    // Bounded to strict 64MB limit (1024 pages of 64KB = 64MB)
+    const memoryLimitPages = Math.min(1024, Math.max(1, dto.memoryLimitPages || 16));
     const language = dto.language || 'wat';
 
     let fuelRemaining = fuelLimit;
