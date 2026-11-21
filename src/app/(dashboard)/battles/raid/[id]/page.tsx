@@ -306,6 +306,23 @@ export default function CooperativeRaidBossPage() {
           </div>
         </div>
 
+        {/* Boss Spell Casting Bar */}
+        <div className="mt-3 space-y-1.5">
+          <div className="flex justify-between text-xs">
+            <span className="inline-flex items-center gap-1.5 font-medium text-amber-400">
+              <AlertTriangle className="h-3.5 w-3.5 animate-pulse" />
+              Boss Spell: Recursive Stack Overflow
+            </span>
+            <span className="font-mono text-amber-300">Casting... (62%)</span>
+          </div>
+          <div className="h-2 w-full overflow-hidden rounded-full bg-zinc-800">
+            <div
+              className="h-full bg-amber-500 transition-all duration-300 animate-pulse"
+              style={{ width: "62%" }}
+            />
+          </div>
+        </div>
+
         <p
           data-testid="raid-combat-log"
           className="mt-4 rounded-lg border border-zinc-800 bg-zinc-950/70 px-3 py-2 text-xs text-zinc-300"
