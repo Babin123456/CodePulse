@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect, useRef } from "react";
-import { Users, Eye, Edit3, Shield, Zap, CheckCircle2, Lock } from "lucide-react";
+import { Users, Eye, Edit3, Shield, Zap, CheckCircle2, Lock, Video, VideoOff, Mic, MicOff, MonitorUp } from "lucide-react";
 import { RemoteCollaborator, MonacoPosition, MonacoSelection } from "../editor/yjs-monaco-binding";
 
 export interface PairProgrammingEditorProps {
@@ -39,6 +39,9 @@ export const PairProgrammingEditor: React.FC<PairProgrammingEditorProps> = ({
   const [collaborators, setCollaborators] = useState<RemoteCollaborator[]>(initialCollaborators);
   const [latencyMs, setLatencyMs] = useState<number>(14); // sub-30ms guarantee
   const [isSaved, setIsSaved] = useState<boolean>(false);
+  const [isVideoActive, setIsVideoActive] = useState<boolean>(false);
+  const [isMicActive, setIsMicActive] = useState<boolean>(true);
+  const [isScreenSharing, setIsScreenSharing] = useState<boolean>(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
   const isReadOnly = role === "spectator";
@@ -165,6 +168,36 @@ export const PairProgrammingEditor: React.FC<PairProgrammingEditorProps> = ({
           </div>
 
           {/* Mode Switcher: Read-Write vs Read-Only Spectator */}
+          <div className="flex items-center gap-1 border-r border-slate-800 pr-2">
+            <button
+              onClick={() => setIsVideoActive(!isVideoActive)}
+              className={`p-1.5 rounded-md text-xs border ${
+                isVideoActive ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300" : "bg-slate-800 border-slate-700 text-slate-400"
+              }`}
+              title={isVideoActive ? "Stop Camera" : "Start WebRTC Camera"}
+            >
+              {isVideoActive ? <Video className="w-3.5 h-3.5" /> : <VideoOff className="w-3.5 h-3.5" />}
+            </button>
+            <button
+              onClick={() => setIsMicActive(!isMicActive)}
+              className={`p-1.5 rounded-md text-xs border ${
+                isMicActive ? "bg-emerald-500/20 border-emerald-500/40 text-emerald-300" : "bg-slate-800 border-slate-700 text-slate-400"
+              }`}
+              title={isMicActive ? "Mute Microphone" : "Unmute Microphone"}
+            >
+              {isMicActive ? <Mic className="w-3.5 h-3.5" /> : <MicOff className="w-3.5 h-3.5" />}
+            </button>
+            <button
+              onClick={() => setIsScreenSharing(!isScreenSharing)}
+              className={`p-1.5 rounded-md text-xs border ${
+                isScreenSharing ? "bg-cyan-500/20 border-cyan-500/40 text-cyan-300" : "bg-slate-800 border-slate-700 text-slate-400"
+              }`}
+              title="Share Screen"
+            >
+              <MonitorUp className="w-3.5 h-3.5" />
+            </button>
+          </div>
+
           <button
             onClick={toggleRole}
             data-testid="role-toggle-btn"
