@@ -22,6 +22,7 @@ import { TournamentEngineService } from './tournament-engine.service';
 import { EsportsModule } from '../esports/esports.module';
 import { RaidBossService } from './raid-boss.service';
 import { AntiSmurfService } from './anti-smurf.service';
+import { AntiCheatBiometricsService } from './anti-cheat-biometrics.service';
 
 
 @Module({
@@ -53,6 +54,7 @@ import { AntiSmurfService } from './anti-smurf.service';
     TournamentEngineService,
     RaidBossService,
     AntiSmurfService,
+    AntiCheatBiometricsService,
   ],
   exports: [
     BattlesService,
@@ -63,6 +65,7 @@ import { AntiSmurfService } from './anti-smurf.service';
     TournamentEngineService,
     RaidBossService,
     AntiSmurfService,
+    AntiCheatBiometricsService,
   ],
 })
 export class BattlesModule {}
