@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { Layout, Monitor, Play, Lock, LucideUnlock, Video, Camera } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -51,6 +51,22 @@ export function SpectatorMultiView({
     layoutProp === "auto" ? "split" : layoutProp,
   );
   const [isCaster, setIsCaster] = useState(false);
+
+  // Global hotkey listeners for caster director: '1' -> P1, '2' -> P2, 's' -> Split
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+      if (e.key === "1") {
+        setLayout("pip-p1");
+      } else if (e.key === "2") {
+        setLayout("pip-p2");
+      } else if (e.key.toLowerCase() === "s") {
+        setLayout("split");
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   const activeFocus = studioDirector.getFocus();
   const directorMode = studioDirector.getMode();
