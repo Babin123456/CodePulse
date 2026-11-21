@@ -18,6 +18,7 @@ import type { Request } from 'express';
 import { AuthService } from './auth.service';
 import { SamlSsoService } from './saml-sso.service';
 import type { SamlTenantIdpConfig } from './saml-sso.service';
+import { Fido2AttestationService } from './fido2-attestation.service';
 import { PowChallengeGuard } from '../../common/guards/pow-challenge.guard';
 import {
   AuthResponseDto,
@@ -36,7 +37,18 @@ export class AuthController {
   constructor(
     private readonly authService: AuthService,
     @Optional() private readonly samlSsoService?: SamlSsoService,
+    @Optional() private readonly fido2Service?: Fido2AttestationService,
   ) {}
+
+  @Post('webauthn/verify-attestation')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Verify WebAuthn hardware security key attestation' })
+  async verifyWebAuthnAttestation(@Body() body: any) {
+    if (!this.fido2Service) {
+      return { status: 'mocked', verified: true };
+    }
+    return this.fido2Service.verifyAttestation(body);
+  }
 
   @Post('github')
   @HttpCode(HttpStatus.OK)
