@@ -973,3 +973,30 @@ model UserSettings {
 
   @@map("user_settings")
 }
+
+model BattleWalEntry {
+  id         String   @id @default(uuid())
+  battleId   String
+  index      Int
+  term       Int
+  command    String
+  payload    Json
+  applied    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@unique([battleId, index])
+  @@index([battleId, term])
+  @@map("battle_wal_entries")
+}
+
+model BattleConsensusSnapshot {
+  id         String   @id @default(uuid())
+  battleId   String   @unique
+  lastIndex  Int
+  lastTerm   Int
+  stateJson  Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("battle_consensus_snapshots")
+}
