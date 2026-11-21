@@ -210,6 +210,9 @@ export const CustomQueryConsole: React.FC = () => {
               <div className="text-xs font-mono text-white/60 flex items-center gap-2">
                 <Sparkles className="w-3.5 h-3.5 text-amber-400" />
                 Visual Query Projection ({results.rows.length} data points)
+                <span className="ml-auto text-[10px] text-amber-400/80 font-mono">
+                  Engine: DuckDB-Wasm (SIMD)
+                </span>
               </div>
               <div className="flex items-end gap-2 h-44 pt-6 border-b border-white/10 overflow-x-auto">
                 {results.rows.slice(0, 24).map((row, idx) => {
