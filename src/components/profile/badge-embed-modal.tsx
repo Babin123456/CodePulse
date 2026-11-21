@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { Copy, Check, ShieldCheck, X } from 'lucide-react';
+import { Copy, Check, ShieldCheck, X, Download } from 'lucide-react';
 
 interface BadgeEmbedModalProps {
   isOpen: boolean;
@@ -92,6 +92,44 @@ export const BadgeEmbedModal: React.FC<BadgeEmbedModalProps> = ({
               <span>{copied ? 'Copied' : 'Copy'}</span>
             </button>
           </div>
+        </div>
+
+        {/* W3C Digital Wallet / Verifiable Credential Export */}
+        <div className="pt-2 border-t border-border/50">
+          <button
+            onClick={() => {
+              const vcPayload = {
+                "@context": [
+                  "https://www.w3.org/2018/credentials/v1",
+                  "https://w3id.org/security/suites/ed25519-2020/v1"
+                ],
+                id: `urn:uuid:${crypto.randomUUID()}`,
+                type: ["VerifiableCredential", "AchievementBadgeCredential"],
+                issuer: {
+                  id: "did:key:z6MkhaXgBZDvotDkL5257faiz48Z8x28uss1664U7ND9gNN3",
+                  name: "CodePulse Authority"
+                },
+                issuanceDate: new Date().toISOString(),
+                credentialSubject: {
+                  id: `did:key:${username}`,
+                  username,
+                  platform: "CodePulse",
+                  verified: true
+                }
+              };
+              const blob = new Blob([JSON.stringify(vcPayload, null, 2)], { type: "application/json" });
+              const url = URL.createObjectURL(blob);
+              const a = document.createElement("a");
+              a.href = url;
+              a.download = `${username}-w3c-verifiable-credential.json`;
+              a.click();
+              URL.revokeObjectURL(url);
+            }}
+            className="w-full py-2.5 px-4 rounded-xl border border-primary/30 bg-primary/10 hover:bg-primary/20 text-primary text-xs font-semibold flex items-center justify-center gap-2 transition"
+          >
+            <Download className="w-4 h-4" />
+            <span>Export to Apple Wallet / W3C Digital Wallet (.json)</span>
+          </button>
         </div>
       </div>
     </div>
