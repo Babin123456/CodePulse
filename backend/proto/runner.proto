@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+package codepulse.runner.v1;
+
+service ExecutionRunnerService {
+  rpc ExecuteCode (ExecutionRequest) returns (ExecutionResponse);
+  rpc StreamExecution (ExecutionRequest) returns (stream ExecutionChunk);
+}
+
+message ExecutionRequest {
+  string executionId = 1;
+  string language = 2; // python, typescript, rust, go
+  string sourceCode = 3;
+  string stdin = 4;
+  int32 timeoutMs = 5;
+  int32 memoryLimitMb = 6;
+}
+
+message ExecutionResponse {
+  string executionId = 1;
+  int32 exitCode = 2;
+  string stdout = 3;
+  string stderr = 4;
+  int64 wallTimeMs = 5;
+  bool timedOut = 6;
+  string microVmId = 7;
+}
+
+message ExecutionChunk {
+  string executionId = 1;
+  enum ChunkType {
+    STDOUT = 0;
+    STDERR = 1;
+    SYSTEM = 2;
+  }
+  ChunkType type = 2;
+  string payload = 3;
+}

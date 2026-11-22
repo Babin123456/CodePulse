@@ -3,6 +3,7 @@ import { AcmeCertService } from './acme-cert.service';
 import { TlsReloaderService } from '../../common/services/tls-reloader.service';
 import { VaultService } from './vault.service';
 import { VaultRotationService } from './vault-rotation.service';
+import { MpcVaultService } from './mpc-vault.service';
 import { PowService } from './pow.service';
 import { PowController } from './pow.controller';
 import { SecurityController } from './security.controller';
@@ -23,6 +24,7 @@ import {
     TlsReloaderService,
     VaultService,
     VaultRotationService,
+    MpcVaultService,
     PowService,
     PowChallengeGuard,
     ThreatDetectorService,
@@ -36,6 +38,7 @@ import {
     TlsReloaderService,
     VaultService,
     VaultRotationService,
+    MpcVaultService,
     PowService,
     PowChallengeGuard,
     ThreatDetectorService,

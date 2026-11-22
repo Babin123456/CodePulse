@@ -1,0 +1,59 @@
+{
+  "defaultAction": "SCMP_ACT_ERRNO",
+  "architectures": [
+    "SCMP_ARCH_X86_64",
+    "SCMP_ARCH_AARCH64"
+  ],
+  "syscalls": [
+    {
+      "names": [
+        "read",
+        "write",
+        "close",
+        "fstat",
+        "mmap",
+        "mprotect",
+        "munmap",
+        "brk",
+        "rt_sigaction",
+        "rt_sigprocmask",
+        "ioctl",
+        "pread64",
+        "pwrite64",
+        "readv",
+        "writev",
+        "access",
+        "pipe",
+        "select",
+        "sched_yield",
+        "nanosleep",
+        "gettimeofday",
+        "getpid",
+        "exit",
+        "exit_group",
+        "futex",
+        "clock_gettime",
+        "clock_getres"
+      ],
+      "action": "SCMP_ACT_ALLOW"
+    },
+    {
+      "names": [
+        "ptrace",
+        "socket",
+        "connect",
+        "bind",
+        "listen",
+        "accept",
+        "mount",
+        "umount2",
+        "reboot",
+        "clone3",
+        "kexec_load",
+        "init_module",
+        "delete_module"
+      ],
+      "action": "SCMP_ACT_KILL"
+    }
+  ]
+}

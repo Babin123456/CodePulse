@@ -203,4 +203,110 @@ describe('RepositoriesService (#501)', () => {
       );
     });
   });
+
+  describe('RocksDB AST and Symbol Caching (#549)', () => {
+    let mockRocksDb: any;
+    let serviceWithRocksDb: RepositoriesService;
+
+    beforeEach(() => {
+      mockRocksDb = {
+        getAst: jest.fn(),
+        putAst: jest.fn(),
+        parseAndCacheAst: jest.fn(),
+        getSymbols: jest.fn(),
+        putSymbols: jest.fn(),
+        parseAndCacheSymbols: jest.fn(),
+        getWorkspaceSymbols: jest.fn(),
+      };
+
+      serviceWithRocksDb = new RepositoriesService(
+        prisma as unknown as PrismaService,
+        mockRocksDb,
+      );
+    });
+
+    it('returns cached AST from RocksDB if present', async () => {
+      prisma.repository.findUnique.mockResolvedValueOnce({
+        id: 'r1',
+        userId: 'user-1',
+        isPrivate: false,
+      });
+
+      const cachedAst = {
+        commitSha: 'c1',
+        filePath: 'src/main.ts',
+        language: 'typescript',
+        nodeCount: 10,
+        ast: { type: 'Program' },
+        tokensCount: 50,
+        parsedAt: Date.now(),
+      };
+      mockRocksDb.getAst.mockResolvedValueOnce(cachedAst);
+
+      const result = await serviceWithRocksDb.getFileAst('user-1', 'r1', 'c1', 'src/main.ts');
+
+      expect(result).toEqual(cachedAst);
+      expect(mockRocksDb.getAst).toHaveBeenCalledWith('c1', 'src/main.ts');
+      expect(mockRocksDb.parseAndCacheAst).not.toHaveBeenCalled();
+    });
+
+    it('parses and caches AST if not already in RocksDB', async () => {
+      prisma.repository.findUnique.mockResolvedValueOnce({
+        id: 'r1',
+        userId: 'user-1',
+        isPrivate: false,
+      });
+
+      mockRocksDb.getAst.mockResolvedValueOnce(null);
+      mockRocksDb.parseAndCacheAst.mockResolvedValueOnce({
+        commitSha: 'c1',
+        filePath: 'src/main.ts',
+        language: 'typescript',
+        nodeCount: 5,
+        ast: { type: 'Program' },
+        tokensCount: 20,
+        parsedAt: Date.now(),
+      });
+
+      const result = await serviceWithRocksDb.getFileAst(
+        'user-1',
+        'r1',
+        'c1',
+        'src/main.ts',
+        'export const x = 1;',
+      );
+
+      expect(result).toBeDefined();
+      expect(mockRocksDb.parseAndCacheAst).toHaveBeenCalledWith(
+        'c1',
+        'src/main.ts',
+        'export const x = 1;',
+      );
+    });
+
+    it('returns workspace symbols from RocksDB', async () => {
+      prisma.repository.findUnique.mockResolvedValueOnce({
+        id: 'r1',
+        userId: 'user-1',
+        isPrivate: false,
+      });
+
+      const mockSymbols = [
+        {
+          filePath: 'src/a.ts',
+          commitSha: 'c1',
+          language: 'typescript',
+          symbols: [{ name: 'Foo', kind: 'class', line: 1, character: 0 }],
+          exports: ['Foo'],
+          imports: [],
+          parsedAt: Date.now(),
+        },
+      ];
+      mockRocksDb.getWorkspaceSymbols.mockResolvedValueOnce(mockSymbols);
+
+      const result = await serviceWithRocksDb.getWorkspaceSymbols('user-1', 'r1', 'c1');
+      expect(result).toEqual(mockSymbols);
+      expect(mockRocksDb.getWorkspaceSymbols).toHaveBeenCalledWith('c1');
+    });
+  });
 });

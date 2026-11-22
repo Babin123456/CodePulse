@@ -1,0 +1,36 @@
+{
+  "Comment": "Multi-Cloud Active-Active / Disaster Recovery Failover Policy for api.codepulse.dev",
+  "Changes": [
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "api.codepulse.dev",
+        "Type": "A",
+        "SetIdentifier": "Primary-Render-Cluster",
+        "Failover": "PRIMARY",
+        "TTL": 60,
+        "ResourceRecords": [
+          {
+            "Value": "216.24.57.1"
+          }
+        ],
+        "HealthCheckId": "d8e3b2a1-0000-4000-8000-0123456789ab"
+      }
+    },
+    {
+      "Action": "UPSERT",
+      "ResourceRecordSet": {
+        "Name": "api.codepulse.dev",
+        "Type": "A",
+        "SetIdentifier": "Secondary-AWS-Fly-Cluster",
+        "Failover": "SECONDARY",
+        "TTL": 60,
+        "ResourceRecords": [
+          {
+            "Value": "76.76.21.21"
+          }
+        ]
+      }
+    }
+  ]
+}

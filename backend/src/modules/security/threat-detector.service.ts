@@ -14,6 +14,9 @@ import { PowService } from './pow.service';
 
 export type ThreatAction = 'ALLOW' | 'CHALLENGE' | 'QUARANTINE';
 
+// Automated step-up challenge threshold configuration
+export const STEP_UP_RISK_THRESHOLD = 75;
+
 export type ThreatVectorCategory =
   | 'NORMAL'
   | 'PATH_TRAVERSAL'

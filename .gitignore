@@ -55,5 +55,7 @@ next-env.d.ts
 
 # scratch / agent temporary files
 scratch/
+data/
+backend/data/
 
 deploy/certs/generated/

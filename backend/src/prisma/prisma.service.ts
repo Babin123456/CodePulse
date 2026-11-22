@@ -8,6 +8,11 @@ import {
 import { PrismaClient } from '@prisma/client';
 import { ReplicaBalancerService } from './replica-balancer.service';
 import { ShardingRouterService } from './sharding-router.service';
+import {
+  TenantShardingService,
+  MapReduceQueryOptions,
+  MapReduceResult,
+} from './tenant-sharding.service';
 import { VaultService } from '../modules/security/vault.service';
 
 const DEFAULT_SLOW_QUERY_THRESHOLD_MS = 200;
@@ -48,6 +53,8 @@ export class PrismaService
     public readonly vaultService?: VaultService,
     @Optional()
     public readonly shardingRouter?: ShardingRouterService,
+    @Optional()
+    public readonly tenantSharding?: TenantShardingService,
   ) {
     const dynamicCreds = vaultService?.getCurrentDatabaseCredential();
     const baseDbUrl = process.env.DATABASE_URL;
@@ -133,6 +140,19 @@ export class PrismaService
   }
 
   /**
+   * Returns the dedicated PrismaClient for a specific tenant organization
+   */
+  getTenantClient(orgId: string | undefined | null): PrismaClient {
+    if (this.tenantSharding) {
+      return this.tenantSharding.getShardClient(orgId);
+    }
+    if (this.shardingRouter) {
+      return this.shardingRouter.getShardClient(orgId);
+    }
+    return this;
+  }
+
+  /**
    * Executes a database operation routed to the tenant's dedicated database shard
    * via consistent hashing on organizationId / guildId.
    */
@@ -140,6 +160,11 @@ export class PrismaService
     tenantId: string | undefined | null,
     action: (client: PrismaClient) => Promise<T>,
   ): Promise<T> {
+    if (this.tenantSharding) {
+      return this.tenantSharding.executeOnTenantShard(tenantId, (client) =>
+        action(client),
+      );
+    }
     if (this.shardingRouter) {
       return this.shardingRouter.executeOnTenantShard(tenantId, (client) =>
         action(client),
@@ -157,6 +182,17 @@ export class PrismaService
     sortFn?: (a: T, b: T) => number,
     limit?: number,
   ): Promise<T[]> {
+    if (this.tenantSharding) {
+      const res = await this.tenantSharding.executeCrossShardMapReduce({
+        mapFn: queryFn,
+        reduceFn: (results: T[][]) => {
+          const flat = results.flat();
+          if (sortFn) flat.sort(sortFn);
+          return typeof limit === 'number' && limit > 0 ? flat.slice(0, limit) : flat;
+        },
+      });
+      return res.data;
+    }
     if (this.shardingRouter) {
       return this.shardingRouter.scatterGather(queryFn, sortFn, limit);
     }
@@ -165,5 +201,41 @@ export class PrismaService
     return typeof limit === 'number' && limit > 0
       ? results.slice(0, limit)
       : results;
+  }
+
+  /**
+   * Cross-shard Map-Reduce query execution with P95 latency tracking (< 250ms SLA)
+   */
+  async executeCrossShardMapReduce<TMap, TReduce>(
+    options: MapReduceQueryOptions<TMap, TReduce>,
+  ): Promise<MapReduceResult<TReduce>> {
+    if (this.tenantSharding) {
+      return this.tenantSharding.executeCrossShardMapReduce(options);
+    }
+    const startTime = performance.now();
+    const mapped = await options.mapFn(this, 'default');
+    const data = options.reduceFn([mapped]);
+    const durationMs = Math.round((performance.now() - startTime) * 100) / 100;
+    return {
+      data,
+      durationMs,
+      shardsQueriedCount: 1,
+      p95SlaMet: durationMs < 250.0,
+    };
+  }
+
+  /**
+   * Executes atomic 2-Phase Commit (2PC) cross-shard transaction with deadlock prevention
+   */
+  async executeCrossShard2PC<T>(
+    participantOrgOrShardIds: string[],
+    txPlan: (shards: Map<string, PrismaClient>, txId: string) => Promise<T>,
+  ): Promise<{ txId: string; result: T; status: 'COMMITTED' }> {
+    if (this.tenantSharding) {
+      return this.tenantSharding.executeCrossShard2PC(participantOrgOrShardIds, txPlan);
+    }
+    const shards = new Map<string, PrismaClient>([['default', this]]);
+    const result = await txPlan(shards, `tx-local-${Date.now()}`);
+    return { txId: 'tx-local', result, status: 'COMMITTED' };
   }
 }
