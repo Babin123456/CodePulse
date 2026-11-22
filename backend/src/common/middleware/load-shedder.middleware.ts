@@ -9,12 +9,11 @@ export enum TrafficPriorityTier {
   LOW = 4, // Avatar uploads, analytics queries, sync, exports (Low)
 }
 
-// Backwards-compatible aliases
-export const TrafficPriorityTierAlias = {
-  TIER_1_CRITICAL: TrafficPriorityTier.CRITICAL,
-  TIER_2_HIGH: TrafficPriorityTier.HIGH,
-  TIER_3_MEDIUM: TrafficPriorityTier.NORMAL,
-  TIER_4_LOW: TrafficPriorityTier.LOW,
+// Fair-share priority queuing thresholds
+export const FAIR_SHARE_PRIORITY_TIERS = {
+  TIER_1: 'Active 1v1 Battle',
+  TIER_2: 'Code Submissions',
+  TIER_3: 'Analytics & Profiles',
 };
 
 export interface LoadShedderStats {

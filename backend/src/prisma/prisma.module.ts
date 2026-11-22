@@ -3,6 +3,8 @@ import { PrismaService } from './prisma.service';
 import { DeadlockDetectorService } from '../common/monitoring/deadlock-detector.service';
 import { ReplicaBalancerService } from './replica-balancer.service';
 import { ShardingRouterService } from './sharding-router.service';
+import { TenantShardingService } from './tenant-sharding.service';
+import { TenantInterceptor } from '../common/interceptors/tenant.interceptor';
 import { SecurityModule } from '../modules/security/security.module';
 
 @Global()
@@ -13,12 +15,16 @@ import { SecurityModule } from '../modules/security/security.module';
     DeadlockDetectorService,
     ReplicaBalancerService,
     ShardingRouterService,
+    TenantShardingService,
+    TenantInterceptor,
   ],
   exports: [
     PrismaService,
     DeadlockDetectorService,
     ReplicaBalancerService,
     ShardingRouterService,
+    TenantShardingService,
+    TenantInterceptor,
   ],
 })
 export class PrismaModule {}

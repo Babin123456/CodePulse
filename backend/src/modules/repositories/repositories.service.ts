@@ -2,14 +2,20 @@ import {
   ForbiddenException,
   Injectable,
   NotFoundException,
+  Optional,
 } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../prisma/prisma.service';
 import { QueryRepositoriesDto, RepositorySortBy, SortOrder } from './dto/repositories.dto';
+import { RocksDbService } from '../storage/rocksdb.service';
+import type { ParsedAstPayload, FileSymbolTable } from '../storage/rocksdb.service';
 
 @Injectable()
 export class RepositoriesService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly rocksDb?: RocksDbService,
+  ) {}
 
   /**
    * Retrieves paginated repositories for the user with server-side filtering, searching, and sorting.
@@ -176,5 +182,70 @@ export class RepositoriesService {
       count: stat.count,
       color: stat.color,
     }));
+  }
+
+  /**
+   * Retrieves or parses and caches AST for a repository file using RocksDB (#549).
+   */
+  async getFileAst(
+    userId: string,
+    repositoryId: string,
+    commitSha: string,
+    filePath: string,
+    fallbackContent?: string,
+  ): Promise<ParsedAstPayload | null> {
+    await this.getRepositoryById(userId, repositoryId);
+
+    if (this.rocksDb) {
+      const cached = await this.rocksDb.getAst(commitSha, filePath);
+      if (cached) return cached;
+
+      if (fallbackContent) {
+        return this.rocksDb.parseAndCacheAst(commitSha, filePath, fallbackContent);
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Retrieves or extracts and caches symbol definitions for a repository file using RocksDB (#549).
+   */
+  async getFileSymbols(
+    userId: string,
+    repositoryId: string,
+    commitSha: string,
+    filePath: string,
+    fallbackContent?: string,
+  ): Promise<FileSymbolTable | null> {
+    await this.getRepositoryById(userId, repositoryId);
+
+    if (this.rocksDb) {
+      const cached = await this.rocksDb.getSymbols(commitSha, filePath);
+      if (cached) return cached;
+
+      if (fallbackContent) {
+        return this.rocksDb.parseAndCacheSymbols(commitSha, filePath, fallbackContent);
+      }
+    }
+
+    return null;
+  }
+
+  /**
+   * Retrieves all file symbols across the workspace for a commit SHA (#549).
+   */
+  async getWorkspaceSymbols(
+    userId: string,
+    repositoryId: string,
+    commitSha: string,
+  ): Promise<FileSymbolTable[]> {
+    await this.getRepositoryById(userId, repositoryId);
+
+    if (this.rocksDb) {
+      return this.rocksDb.getWorkspaceSymbols(commitSha);
+    }
+
+    return [];
   }
 }

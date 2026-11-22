@@ -8,8 +8,9 @@ import {
   Request,
   Response as Res,
   Headers,
+  Body,
 } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiHeader } from '@nestjs/swagger';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiParam, ApiHeader, ApiQuery, ApiBody } from '@nestjs/swagger';
 import type { Response } from 'express';
 import { RepositoriesService } from './repositories.service';
 import { ArchiveStreamService } from './archive-stream.service';
@@ -122,5 +123,57 @@ export class RepositoriesController {
   })
   async syncRepository(@Request() req: any, @Param('id') id: string) {
     return this.repositoriesService.syncRepository(req.user.id, id);
+  }
+
+  @Get(':id/ast')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Retrieve pre-parsed AST tree with sub-millisecond RocksDB lookup (#549)',
+  })
+  @ApiParam({ name: 'id', description: 'Repository ID' })
+  @ApiQuery({ name: 'commitSha', required: true })
+  @ApiQuery({ name: 'filePath', required: true })
+  async getFileAst(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Query('commitSha') commitSha: string,
+    @Query('filePath') filePath: string,
+  ) {
+    return this.repositoriesService.getFileAst(req.user.id, id, commitSha, filePath);
+  }
+
+  @Get(':id/symbols')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Retrieve pre-parsed symbol table with sub-millisecond RocksDB lookup (#549)',
+  })
+  @ApiParam({ name: 'id', description: 'Repository ID' })
+  @ApiQuery({ name: 'commitSha', required: true })
+  @ApiQuery({ name: 'filePath', required: true })
+  async getFileSymbols(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Query('commitSha') commitSha: string,
+    @Query('filePath') filePath: string,
+  ) {
+    return this.repositoriesService.getFileSymbols(req.user.id, id, commitSha, filePath);
+  }
+
+  @Get(':id/workspace-symbols')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({
+    summary: 'Retrieve all file symbols across workspace for a given commit SHA (#549)',
+  })
+  @ApiParam({ name: 'id', description: 'Repository ID' })
+  @ApiQuery({ name: 'commitSha', required: true })
+  async getWorkspaceSymbols(
+    @Request() req: any,
+    @Param('id') id: string,
+    @Query('commitSha') commitSha: string,
+  ) {
+    return this.repositoriesService.getWorkspaceSymbols(req.user.id, id, commitSha);
   }
 }

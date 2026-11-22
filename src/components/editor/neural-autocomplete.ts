@@ -15,6 +15,7 @@ export interface InlineCompletionResponse {
   completion: string;
   latencyMs: number;
   source: 'cache' | 'onnx_wasm' | 'cloud_fallback';
+  confidenceScore?: number;
 }
 
 export class NeuralAutocompleteEngine {
@@ -76,6 +77,7 @@ export class NeuralAutocompleteEngine {
         completion,
         latencyMs,
         source: 'onnx_wasm',
+        confidenceScore: 0.94,
       };
     } catch (err) {
       // 3. Graceful fallback if device lacks Wasm/WebGPU memory

@@ -570,25 +570,50 @@ enum StorageTier {
 }
 
 model CommitArchive {
-  id               String      @id @default(uuid())
-  repositoryId     String
-  commitSha        String
-  tier             StorageTier @default(HOT)
-  originalBytes    Int
-  compressedBytes  Int
-  compressionRatio Float       @default(1.0)
-  storageLocation  String      // Local file path, S3 URL, or Glacier Archive ID
-  accessCount      Int         @default(0)
-  lastAccessedAt   DateTime    @default(now())
-  archivedAt       DateTime    @default(now())
-  createdAt        DateTime    @default(now())
-  updatedAt        DateTime    @updatedAt
+  id                  String      @id @default(uuid())
+  repositoryId        String
+  commitSha           String
+  assetType           String      @default("COMMIT") // "COMMIT" | "MATCH_REPLAY"
+  tier                StorageTier @default(HOT)
+  originalBytes       Int
+  compressedBytes     Int
+  compressionRatio    Float       @default(1.0)
+  storageLocation     String      // Local file path, S3 URL, or Glacier Archive ID
+  checksumSha256      String?     // SHA-256 for cryptographic integrity verification
+  checksumMd5         String?     // MD5 for S3 ETag verification
+  restorationStatus   String?     // IDLE | RESTORING | RESTORED
+  restorationProgress Float?      // 0.0 - 100.0%
+  restoredAt          DateTime?
+  accessCount         Int         @default(0)
+  lastAccessedAt      DateTime    @default(now())
+  archivedAt          DateTime    @default(now())
+  createdAt           DateTime    @default(now())
+  updatedAt           DateTime    @updatedAt
 
   @@unique([repositoryId, commitSha])
   @@index([repositoryId])
   @@index([tier])
   @@index([lastAccessedAt])
   @@map("commit_archives")
+}
+
+model StorageTierMetrics {
+  id                      String   @id @default(uuid())
+  recordedAt              DateTime @default(now())
+  totalAssets             Int
+  hotTierCount            Int
+  warmTierCount           Int
+  coldTierCount           Int
+  totalOriginalBytes      BigInt   @default(0)
+  totalCompressedBytes    BigInt   @default(0)
+  totalBytesSaved         BigInt   @default(0)
+  estimatedMonthlyCostUsd Float    @default(0.0)
+  estimatedSavingsUsd     Float    @default(0.0)
+  savingsPercentage       Float    @default(0.0)
+  metadata                Json?
+
+  @@index([recordedAt])
+  @@map("storage_tier_metrics")
 }
 
 
@@ -972,4 +997,78 @@ model UserSettings {
   user                 User     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@map("user_settings")
+}
+
+model ZkpSubmissionProof {
+  id            String   @id @default(uuid())
+  userId        String
+  challengeId   String
+  proofHash     String   @unique
+  publicSignals Json
+  verifiedAt    DateTime @default(now())
+
+  @@index([userId])
+  @@index([challengeId])
+  @@map("zkp_submission_proofs")
+}
+
+enum MpcSecretStatus {
+  ACTIVE
+  RECONSTRUCTED
+  ROTATED
+  REVOKED
+}
+
+model MpcVaultSecret {
+  id              String               @id @default(uuid())
+  organizationId  String
+  name            String               // e.g. "PROD_DEPLOYMENT_MASTER_KEY"
+  description     String?
+  thresholdK      Int                  // e.g. 3
+  totalSharesN    Int                  // e.g. 5
+  status          MpcSecretStatus      @default(ACTIVE)
+  secretHash      String               // SHA-256 hash of master secret for verification (never stores plain secret)
+  shares          MpcShareAllocation[]
+  auditProofs     MpcAuditProof[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  rotatedAt       DateTime?
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("mpc_vault_secrets")
+}
+
+model MpcShareAllocation {
+  id               String         @id @default(uuid())
+  secretId         String
+  secret           MpcVaultSecret @relation(fields: [secretId], references: [id], onDelete: Cascade)
+  shareIndex       Int            // 1 to n (x coordinate in GF256)
+  allocatedTo      String         // Admin user ID
+  shareFingerprint String         // SHA-256 fingerprint of the share
+  encryptedShare   String?        // Ephemeral or encrypted share envelope if stored
+  isBurned         Boolean        @default(false)
+  burnedAt         DateTime?
+  allocatedAt      DateTime       @default(now())
+
+  @@unique([secretId, shareIndex])
+  @@index([allocatedTo])
+  @@map("mpc_share_allocations")
+}
+
+model MpcAuditProof {
+  id                  String         @id @default(uuid())
+  secretId            String
+  secret              MpcVaultSecret @relation(fields: [secretId], references: [id], onDelete: Cascade)
+  action              String         // "SPLIT" | "RECONSTRUCT" | "BURN" | "ROTATE"
+  performedBy         String         // Admin user ID
+  thresholdMet        Boolean        @default(false)
+  participatingShares Int[]          // e.g. [1, 3, 5]
+  proofSignature      String         // HMAC-SHA256 audit proof signature
+  metadata            Json?          // Nonce, IP, client device, timestamp
+  createdAt           DateTime       @default(now())
+
+  @@index([secretId])
+  @@index([performedBy])
+  @@map("mpc_audit_proofs")
 }

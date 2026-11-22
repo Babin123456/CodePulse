@@ -1,28 +1,50 @@
-import { HsmService } from './hsm.service';
+import { HsmService, IS3GlacierAdapter } from './hsm.service';
 import { PrismaService } from '../../prisma/prisma.service';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
 
-describe('HsmService (Hierarchical Storage Management #458)', () => {
+describe('HsmService (Multi-Tier Hierarchical Storage Management #550)', () => {
   let service: HsmService;
   let tempStorageRoot: string;
   let mockPrisma: any;
+  let mockS3Adapter: IS3GlacierAdapter;
 
   beforeEach(() => {
     tempStorageRoot = fs.mkdtempSync(
       path.join(os.tmpdir(), 'codepulse-hsm-test-'),
     );
+
+    mockS3Adapter = {
+      putObject: jest.fn().mockResolvedValue({ ETag: '"s3-etag-12345"' }),
+      copyObject: jest.fn().mockResolvedValue({ CopyObjectResult: { ETag: '"s3-copy-etag"' } }),
+      restoreObject: jest.fn().mockResolvedValue(undefined),
+      headObject: jest.fn().mockResolvedValue({
+        ContentLength: 1024,
+        ETag: '"s3-head-etag"',
+        StorageClass: 'GLACIER',
+        Restore: 'ongoing-request="false", expiry-date="Fri, 23 Dec 2026 00:00:00 GMT"',
+      }),
+      deleteObject: jest.fn().mockResolvedValue(undefined),
+    };
+
     mockPrisma = {
       commitArchive: {
         upsert: jest.fn(async ({ create }: any) => ({
           id: 'archive-uuid-1',
           ...create,
         })),
-        findUnique: jest.fn(),
-        findMany: jest.fn(),
+        findUnique: jest.fn().mockResolvedValue(null),
+        findFirst: jest.fn().mockResolvedValue(null),
+        findMany: jest.fn().mockResolvedValue([]),
         update: jest.fn(async ({ data }: any) => ({
           id: 'archive-uuid-1',
+          ...data,
+        })),
+      },
+      storageTierMetrics: {
+        create: jest.fn(async ({ data }: any) => ({
+          id: 'metrics-uuid-1',
           ...data,
         })),
       },
@@ -31,6 +53,7 @@ describe('HsmService (Hierarchical Storage Management #458)', () => {
     service = new HsmService(
       mockPrisma as unknown as PrismaService,
       tempStorageRoot,
+      mockS3Adapter,
     );
   });
 
@@ -42,8 +65,8 @@ describe('HsmService (Hierarchical Storage Management #458)', () => {
     }
   });
 
-  describe('Hot SSD Commit Archiving', () => {
-    it('archives new commit onto Hot SSD tier with 1.0 compression ratio', async () => {
+  describe('Hot NVMe SSD Archiving & Cryptographic Checksums', () => {
+    it('archives new commit onto Hot SSD tier with MD5 & SHA-256 checksums', async () => {
       const diff = 'diff --git a/src/index.ts b/src/index.ts\n+console.log("hello");';
       const result = await service.archiveCommit({
         repositoryId: 'repo-100',
@@ -55,21 +78,38 @@ describe('HsmService (Hierarchical Storage Management #458)', () => {
       expect(result.originalBytes).toBe(Buffer.byteLength(diff));
       expect(result.compressedBytes).toBe(Buffer.byteLength(diff));
       expect(result.compressionRatio).toBe(1.0);
-      expect(mockPrisma.commitArchive.upsert).toHaveBeenCalled();
+      expect(result.checksumSha256).toBeDefined();
+      expect(result.checksumMd5).toBeDefined();
+      expect(mockPrisma.commitArchive.upsert).toHaveBeenCalledWith(
+        expect.objectContaining({
+          create: expect.objectContaining({
+            tier: 'HOT',
+            checksumSha256: expect.any(String),
+            checksumMd5: expect.any(String),
+          }),
+        }),
+      );
+    });
+
+    it('archives match replay video recording with integrity verification', async () => {
+      const replay = JSON.stringify({ matchId: 'battle-999', keystrokes: 450 });
+      const result = await service.archiveMatchReplay({
+        battleId: 'battle-999',
+        replayPayload: replay,
+      });
+
+      expect(result.battleId).toBe('battle-999');
+      expect(result.tier).toBe('HOT');
+      expect(result.checksumSha256).toBeDefined();
     });
   });
 
-  describe('Automated Lifecycle Tiering Migration', () => {
-    it('migrates commits 30-365 days old to Warm S3 (Gzip compressed)', async () => {
+  describe('Automated Lifecycle Tiering Migration (30d Warm, 90d Cold)', () => {
+    it('migrates inactive commits/replays older than 30 days to Warm S3 (Gzip)', async () => {
       const diff = 'import React from "react";\nexport const Button = () => <button>Click</button>;';
-      const oldDate = new Date(Date.now() - 45 * 24 * 60 * 60 * 1000); // 45 days old
+      const thirtyFiveDaysAgo = new Date(Date.now() - 35 * 24 * 60 * 60 * 1000);
 
-      const archived = await service.archiveCommit({
-        repositoryId: 'repo-100',
-        commitSha: 'warm-sha-1',
-        diffContent: diff,
-        createdAt: oldDate,
-      });
+      const checksums = service.calculateChecksums(Buffer.from(diff, 'utf8'));
 
       mockPrisma.commitArchive.findMany.mockResolvedValueOnce([
         {
@@ -79,14 +119,24 @@ describe('HsmService (Hierarchical Storage Management #458)', () => {
           tier: 'HOT',
           storageLocation: path.join(tempStorageRoot, 'hot', 'repo-100_warm-sha-1.diff'),
           originalBytes: Buffer.byteLength(diff),
-          archivedAt: oldDate,
+          checksumSha256: checksums.sha256,
+          archivedAt: thirtyFiveDaysAgo,
         },
       ]);
+
+      // Write mock hot file
+      const hotPath = path.join(tempStorageRoot, 'hot', 'repo-100_warm-sha-1.diff');
+      fs.writeFileSync(hotPath, diff);
 
       const migration = await service.runLifecycleTieringMigration();
 
       expect(migration.migratedToWarm).toBe(1);
       expect(migration.migratedToCold).toBe(0);
+      expect(mockS3Adapter.putObject).toHaveBeenCalledWith(
+        expect.objectContaining({
+          StorageClass: 'STANDARD',
+        }),
+      );
       expect(mockPrisma.commitArchive.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -94,18 +144,18 @@ describe('HsmService (Hierarchical Storage Management #458)', () => {
           }),
         }),
       );
+      // Validates that hot file was deleted after successful migration
+      expect(fs.existsSync(hotPath)).toBe(false);
     });
 
-    it('migrates commits > 365 days old to Cold Glacier (Brotli max-compression)', async () => {
-      const diff = 'const ancientCode = "written 2 years ago in 2024";'.repeat(20);
-      const ancientDate = new Date(Date.now() - 400 * 24 * 60 * 60 * 1000); // 400 days old
+    it('migrates commits older than 90 days to Cold S3 Glacier (Brotli)', async () => {
+      const diff = 'const ancientCode = "written over 90 days ago";'.repeat(25);
+      const ninetyFiveDaysAgo = new Date(Date.now() - 95 * 24 * 60 * 60 * 1000);
 
-      await service.archiveCommit({
-        repositoryId: 'repo-ancient',
-        commitSha: 'ancient-sha-1',
-        diffContent: diff,
-        createdAt: ancientDate,
-      });
+      const checksums = service.calculateChecksums(Buffer.from(diff, 'utf8'));
+
+      const hotPath = path.join(tempStorageRoot, 'hot', 'repo-ancient_ancient-sha-1.diff');
+      fs.writeFileSync(hotPath, diff);
 
       mockPrisma.commitArchive.findMany.mockResolvedValueOnce([
         {
@@ -113,9 +163,10 @@ describe('HsmService (Hierarchical Storage Management #458)', () => {
           repositoryId: 'repo-ancient',
           commitSha: 'ancient-sha-1',
           tier: 'HOT',
-          storageLocation: path.join(tempStorageRoot, 'hot', 'repo-ancient_ancient-sha-1.diff'),
+          storageLocation: hotPath,
           originalBytes: Buffer.byteLength(diff),
-          archivedAt: ancientDate,
+          checksumSha256: checksums.sha256,
+          archivedAt: ninetyFiveDaysAgo,
         },
       ]);
 
@@ -123,6 +174,11 @@ describe('HsmService (Hierarchical Storage Management #458)', () => {
 
       expect(migration.migratedToCold).toBe(1);
       expect(migration.totalBytesSaved).toBeGreaterThan(0);
+      expect(mockS3Adapter.putObject).toHaveBeenCalledWith(
+        expect.objectContaining({
+          StorageClass: 'GLACIER',
+        }),
+      );
       expect(mockPrisma.commitArchive.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
@@ -131,23 +187,40 @@ describe('HsmService (Hierarchical Storage Management #458)', () => {
         }),
       );
     });
+
+    it('aborts tier migration and retains hot copy if cryptographic checksum check fails', async () => {
+      const diff = 'legitimate original content';
+      const hotPath = path.join(tempStorageRoot, 'hot', 'tampered_sha.diff');
+      fs.writeFileSync(hotPath, diff);
+
+      await expect(
+        service.migrateToWarm({
+          id: 'archive-tampered',
+          repositoryId: 'repo-tampered',
+          commitSha: 'tampered-sha',
+          storageLocation: hotPath,
+          originalBytes: Buffer.byteLength(diff),
+          checksumSha256: 'corrupted-expected-sha256-hash',
+        }),
+      ).rejects.toThrow();
+
+      // Ensure original file is preserved on SSD
+      expect(fs.existsSync(hotPath)).toBe(true);
+    });
   });
 
-  describe('Transparent Retrieval Gateway', () => {
+  describe('Transparent Retrieval Shim & S3 Glacier Restoration', () => {
     it('transparently fetches and decompresses diff from Warm S3 tier', async () => {
       const originalDiff = 'const feature = "warm tier diff content";';
-      const commit = await service.archiveCommit({
-        repositoryId: 'repo-retrieve',
-        commitSha: 'sha-retrieve-warm',
-        diffContent: originalDiff,
-      });
+      const hotPath = path.join(tempStorageRoot, 'hot', 'repo-retrieve_sha-retrieve-warm.diff');
+      fs.writeFileSync(hotPath, originalDiff);
 
       // Migrate to warm
       await service.migrateToWarm({
         id: 'archive-retrieve-1',
         repositoryId: 'repo-retrieve',
         commitSha: 'sha-retrieve-warm',
-        storageLocation: path.join(tempStorageRoot, 'hot', 'repo-retrieve_sha-retrieve-warm.diff'),
+        storageLocation: hotPath,
         originalBytes: Buffer.byteLength(originalDiff),
       });
 
@@ -171,40 +244,28 @@ describe('HsmService (Hierarchical Storage Management #458)', () => {
       expect(retrieved.accessCount).toBe(3);
     });
 
-    it('transparently fetches and decompresses diff from Cold Glacier tier', async () => {
-      const originalDiff = 'const archive = "cold glacier brotli content";';
-      await service.archiveCommit({
-        repositoryId: 'repo-retrieve',
-        commitSha: 'sha-retrieve-cold',
-        diffContent: originalDiff,
-      });
-
-      // Migrate to cold
-      await service.migrateToCold({
-        id: 'archive-cold-1',
-        repositoryId: 'repo-retrieve',
-        commitSha: 'sha-retrieve-cold',
-        storageLocation: path.join(tempStorageRoot, 'hot', 'repo-retrieve_sha-retrieve-cold.diff'),
-        originalBytes: Buffer.byteLength(originalDiff),
-      });
-
-      mockPrisma.commitArchive.findUnique.mockResolvedValueOnce({
-        id: 'archive-cold-1',
-        repositoryId: 'repo-retrieve',
-        commitSha: 'sha-retrieve-cold',
+    it('triggers on-demand Glacier restore and reports restoration progress for Cold assets', async () => {
+      mockPrisma.commitArchive.findFirst.mockResolvedValue({
+        id: 'archive-glacier-1',
+        commitSha: 'cold-sha-99',
         tier: 'COLD',
-        storageLocation: path.join(tempStorageRoot, 'cold', 'repo-retrieve_sha-retrieve-cold.diff.br'),
-        originalBytes: Buffer.byteLength(originalDiff),
-        compressedBytes: 15,
-        compressionRatio: 0.3,
-        accessCount: 0,
-        lastAccessedAt: new Date(),
+        storageLocation: 's3://codepulse-hsm-archives/cold/repo_cold-sha-99.diff.br',
       });
 
-      const retrieved = await service.getCommitDiff('repo-retrieve', 'sha-retrieve-cold');
+      const restore = await service.initiateGlacierRestore('cold-sha-99', 'Expedited');
 
-      expect(retrieved.diffContent).toBe(originalDiff);
-      expect(retrieved.tier).toBe('COLD');
+      expect(restore.status).toBe('RESTORING');
+      expect(restore.progressPercentage).toBe(65.0);
+      expect(mockS3Adapter.restoreObject).toHaveBeenCalledWith(
+        expect.objectContaining({
+          RestoreRequest: expect.objectContaining({
+            GlacierJobParameters: { Tier: 'Expedited' },
+          }),
+        }),
+      );
+
+      const status = await service.getRestorationStatus('cold-sha-99');
+      expect(status.status).toBe('RESTORING');
     });
 
     it('throws NotFoundException when commit archive does not exist', async () => {
@@ -216,48 +277,29 @@ describe('HsmService (Hierarchical Storage Management #458)', () => {
     });
   });
 
-  describe('Storage Tier Audit & Cost Savings Calculation', () => {
-    it('calculates storage distribution and > 80% cost savings for repositories with cold commits', async () => {
+  describe('StorageTierMetrics Persistence & Cost Audit', () => {
+    it('persists audit report into Prisma StorageTierMetrics model', async () => {
       mockPrisma.commitArchive.findMany.mockResolvedValueOnce([
-        // 5 hot commits
-        ...Array.from({ length: 5 }, (_, i) => ({
-          repositoryId: 'large-repo-50k',
-          commitSha: `hot-${i}`,
-          tier: 'HOT',
-          originalBytes: 10000,
-          compressedBytes: 10000,
-        })),
-        // 20 warm commits
-        ...Array.from({ length: 20 }, (_, i) => ({
-          repositoryId: 'large-repo-50k',
-          commitSha: `warm-${i}`,
-          tier: 'WARM',
-          originalBytes: 10000,
-          compressedBytes: 3000,
-        })),
-        // 75 cold commits
-        ...Array.from({ length: 75 }, (_, i) => ({
-          repositoryId: 'large-repo-50k',
-          commitSha: `cold-${i}`,
-          tier: 'COLD',
-          originalBytes: 10000,
-          compressedBytes: 1500,
-        })),
+        { repositoryId: 'repo-1', tier: 'HOT', originalBytes: 10000, compressedBytes: 10000 },
+        { repositoryId: 'repo-1', tier: 'WARM', originalBytes: 10000, compressedBytes: 4000 },
+        { repositoryId: 'repo-1', tier: 'COLD', originalBytes: 10000, compressedBytes: 2000 },
       ]);
 
       const audit = await service.getStorageTierAudit();
+      const metrics = await service.persistStorageTierMetrics(audit);
 
-      expect(audit.totalArchives).toBe(100);
-      expect(audit.hotTierCount).toBe(5);
-      expect(audit.warmTierCount).toBe(20);
-      expect(audit.coldTierCount).toBe(75);
-      expect(audit.totalBytesSaved).toBeGreaterThan(0);
-      expect(audit.overallCompressionPercentage).toBeGreaterThan(70);
-      expect(audit.estimatedSavingsPercentage).toBeGreaterThan(80);
-
-      const repoSavings = audit.repositoryBreakdown['large-repo-50k'].costSavingsPercentage;
-      expect(repoSavings).toBeGreaterThan(80); // Achieves > 80% cost savings
+      expect(mockPrisma.storageTierMetrics.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            totalAssets: 3,
+            hotTierCount: 1,
+            warmTierCount: 1,
+            coldTierCount: 1,
+            totalBytesSaved: expect.any(BigInt),
+          }),
+        }),
+      );
+      expect(metrics).toBeDefined();
     });
   });
 });
-

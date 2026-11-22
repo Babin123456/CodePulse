@@ -3,7 +3,8 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import Redis from 'ioredis';
 import { GithubController } from './github.controller';
 import { GithubService } from './github.service';
-import { GithubWebhookController } from './github-webhook.controller';
+import { GithubWebhookController } from './github.webhook.controller';
+import { GithubWebhookService } from './github.webhook.service';
 import { CircuitBreakerService } from './circuit-breaker.service';
 import { CommitVerifierService } from './commit-verifier.service';
 import { GITHUB_STALE_REDIS, GithubStaleStore } from './github-stale.store';
@@ -14,6 +15,7 @@ import { CustomThrottlerGuard } from '../../common/guards/custom-throttler.guard
   controllers: [GithubController, GithubWebhookController],
   providers: [
     GithubService,
+    GithubWebhookService,
     CircuitBreakerService,
     CommitVerifierService,
     GithubStaleStore,

@@ -214,6 +214,9 @@ export default function RepositoryUniversePage() {
           <span className="flex items-center gap-2">
             <span className="h-0.5 w-4 bg-sky-300" /> Co-change particle beam
           </span>
+          <span className="flex items-center gap-2 text-[10px] text-cyan-300/80">
+            <Sparkles className="h-3 w-3 text-cyan-400" /> Holographic 3D Constellation Active
+          </span>
         </div>
       </div>
 

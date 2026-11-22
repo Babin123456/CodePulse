@@ -8,6 +8,8 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ZkpVerifierService } from './zkp-verifier.service';
+import { ZkSnarkVerifierService } from './zk-snark-verifier.service';
+import type { ZkProofSubmission } from './zk-snark-verifier.service';
 import type {
   ZkpVerificationRequest,
   ZkpVerificationResult,
@@ -16,7 +18,21 @@ import type {
 @ApiTags('crypto')
 @Controller('crypto')
 export class CryptoController {
-  constructor(private readonly zkpService: ZkpVerifierService) {}
+  constructor(
+    private readonly zkpService: ZkpVerifierService,
+    private readonly zkSnarkService: ZkSnarkVerifierService,
+  ) {}
+
+  @Post('verify-zkp')
+  @ApiOperation({
+    summary: 'Verify Groth16 zk-SNARK proof and return cryptographically verifiable audit certificate',
+  })
+  async verifyGroth16Zkp(@Body() payload: ZkProofSubmission) {
+    if (!payload) {
+      throw new BadRequestException('Request body is required');
+    }
+    return this.zkSnarkService.verifyProof(payload);
+  }
 
   @Post('verify-zkp-proof')
   @ApiOperation({
