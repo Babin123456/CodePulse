@@ -999,6 +999,31 @@ model UserSettings {
   @@map("user_settings")
 }
 
+model BattleWalEntry {
+  id         String   @id @default(uuid())
+  battleId   String
+  index      Int
+  term       Int
+  command    String
+  payload    Json
+  applied    Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@unique([battleId, index])
+  @@index([battleId, term])
+  @@map("battle_wal_entries")
+}
+
+model BattleConsensusSnapshot {
+  id         String   @id @default(uuid())
+  battleId   String   @unique
+  lastIndex  Int
+  lastTerm   Int
+  stateJson  Json
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@map("battle_consensus_snapshots")
 model ZkpSubmissionProof {
   id            String   @id @default(uuid())
   userId        String
@@ -1010,4 +1035,65 @@ model ZkpSubmissionProof {
   @@index([userId])
   @@index([challengeId])
   @@map("zkp_submission_proofs")
+}
+
+enum MpcSecretStatus {
+  ACTIVE
+  RECONSTRUCTED
+  ROTATED
+  REVOKED
+}
+
+model MpcVaultSecret {
+  id              String               @id @default(uuid())
+  organizationId  String
+  name            String               // e.g. "PROD_DEPLOYMENT_MASTER_KEY"
+  description     String?
+  thresholdK      Int                  // e.g. 3
+  totalSharesN    Int                  // e.g. 5
+  status          MpcSecretStatus      @default(ACTIVE)
+  secretHash      String               // SHA-256 hash of master secret for verification (never stores plain secret)
+  shares          MpcShareAllocation[]
+  auditProofs     MpcAuditProof[]
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  rotatedAt       DateTime?
+
+  @@unique([organizationId, name])
+  @@index([organizationId])
+  @@map("mpc_vault_secrets")
+}
+
+model MpcShareAllocation {
+  id               String         @id @default(uuid())
+  secretId         String
+  secret           MpcVaultSecret @relation(fields: [secretId], references: [id], onDelete: Cascade)
+  shareIndex       Int            // 1 to n (x coordinate in GF256)
+  allocatedTo      String         // Admin user ID
+  shareFingerprint String         // SHA-256 fingerprint of the share
+  encryptedShare   String?        // Ephemeral or encrypted share envelope if stored
+  isBurned         Boolean        @default(false)
+  burnedAt         DateTime?
+  allocatedAt      DateTime       @default(now())
+
+  @@unique([secretId, shareIndex])
+  @@index([allocatedTo])
+  @@map("mpc_share_allocations")
+}
+
+model MpcAuditProof {
+  id                  String         @id @default(uuid())
+  secretId            String
+  secret              MpcVaultSecret @relation(fields: [secretId], references: [id], onDelete: Cascade)
+  action              String         // "SPLIT" | "RECONSTRUCT" | "BURN" | "ROTATE"
+  performedBy         String         // Admin user ID
+  thresholdMet        Boolean        @default(false)
+  participatingShares Int[]          // e.g. [1, 3, 5]
+  proofSignature      String         // HMAC-SHA256 audit proof signature
+  metadata            Json?          // Nonce, IP, client device, timestamp
+  createdAt           DateTime       @default(now())
+
+  @@index([secretId])
+  @@index([performedBy])
+  @@map("mpc_audit_proofs")
 }

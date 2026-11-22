@@ -8,7 +8,8 @@ import {
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ZkpVerifierService } from './zkp-verifier.service';
-import { ZkSnarkVerifierService, ZkProofSubmission } from './zk-snark-verifier.service';
+import { ZkSnarkVerifierService } from './zk-snark-verifier.service';
+import type { ZkProofSubmission } from './zk-snark-verifier.service';
 import type {
   ZkpVerificationRequest,
   ZkpVerificationResult,
